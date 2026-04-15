@@ -37,6 +37,12 @@ type classroomsConfig struct {
 	ApplicationToken     string `json:"application_api_token"`
 	ApplicationTokenFile string `json:"application_api_token_file"`
 
+	// Global Game
+	DefaultGame string `json:"default_game"`
+
+	// Lobby
+	LobbyServer string `json:"lobby_server"`
+
 	// Timing / polling
 	PollIntervalSeconds  int `json:"poll_interval_seconds"`
 	PollTimeoutSeconds   int `json:"poll_timeout_seconds"`
@@ -61,7 +67,6 @@ type templateConfig struct {
 	MountID               int            `json:"mount_id"`
 	TemplateName          string         `json:"template_name"`
 	InstanceTemplateMount string         `json:"instance_template_mount"`
-	DefaultGame           string         `json:"default_game"`
 	WorldName             string         `json:"world_name"`
 	AdminName             string         `json:"admin_name"`
 	NamePrefix            string         `json:"name_prefix"`
@@ -80,7 +85,6 @@ type templateConfig struct {
 	InternalPort          int            `json:"internal_port"`
 	MediaPool             string         `json:"media_pool"`
 	Groups                []string       `json:"groups"`
-	FallbackServer        string         `json:"fallback_server"`
 	Limits                resourceLimits `json:"limits"`
 	FeatureLimits         featureLimits  `json:"feature_limits"`
 
@@ -172,8 +176,24 @@ func init() {
 
 		ctrl = c
 
-		// Phase 1: just log successful init.
-		// Later phases register commands, formspec handlers, mod channel, etc.
+		// Startup reconciliation and background tasks
+		c.reconcileInstances()
+		c.startStatusChecker()
+
+		// Register hooks
+		proxy.RegisterOnChatMsg(c.onChatMsg)
+
+		// Register commands
+		c.registerCommands()
+
+		// Register formspec handlers
+		c.registerHandlers()
+
+		// Register mod channel
+		c.registerModChannel()
+
+		// Register join/leave hooks
+		c.registerJoinLeave()
 
 		tCount, _ := c.countTeachers()
 		cCount, _ := c.countClasses()
@@ -188,10 +208,16 @@ func init() {
 func loadConfig() (classroomsConfig, error) {
 	path := strings.TrimSpace(os.Getenv("CLASSROOMS_CONFIG"))
 	if path == "" {
-		path = firstExistingPath(
+		var ok bool
+		path, ok = firstExistingPath(
 			filepath.Join(proxy.Path("plugins"), pluginName, "config.json"),
 			filepath.Join(proxy.Path("plugins"), pluginName+".json"),
+			"config.json",
+			pluginName+".json",
 		)
+		if !ok {
+			return classroomsConfig{}, fmt.Errorf("no config file found in search paths")
+		}
 	}
 
 	data, err := os.ReadFile(path)
@@ -234,6 +260,13 @@ func loadConfig() (classroomsConfig, error) {
 	}
 	if cfg.DBUser == "" {
 		return classroomsConfig{}, errors.New("db_user is required")
+	}
+
+	if cfg.DefaultGame == "" {
+		return classroomsConfig{}, errors.New("default_game is required")
+	}
+	if cfg.LobbyServer == "" {
+		return classroomsConfig{}, errors.New("lobby_server is required")
 	}
 
 	dbPass := strings.TrimSpace(cfg.DBPassword)
@@ -294,9 +327,6 @@ func validateTemplate(name string, tpl *templateConfig) error {
 	if tpl.InstanceTemplateMount == "" {
 		tpl.InstanceTemplateMount = "/home/mount"
 	}
-	if tpl.DefaultGame == "" {
-		return fmt.Errorf("template %q: default_game is required", name)
-	}
 	if tpl.WorldName == "" {
 		tpl.WorldName = "world"
 	}
@@ -335,16 +365,13 @@ func validateTemplate(name string, tpl *templateConfig) error {
 
 // ── Shared Helpers ──────────────────────────────────────────────────────────
 
-func firstExistingPath(paths ...string) string {
+func firstExistingPath(paths ...string) (string, bool) {
 	for _, path := range paths {
 		if _, err := os.Stat(path); err == nil {
-			return path
+			return path, true
 		}
 	}
-	if len(paths) > 0 {
-		return paths[0]
-	}
-	return ""
+	return "", false
 }
 
 // isTeacher checks if a player is a registered teacher or has server perms.

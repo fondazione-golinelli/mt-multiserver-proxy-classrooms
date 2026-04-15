@@ -1,0 +1,24 @@
+{
+  "panel_url": "https://pelican.silvaserv.it",
+  "application_api_token": "YOUR_PELICAN_API_TOKEN",
+  "default_game": "mineclonia",
+  "lobby_server": "lobby",
+  "db_host": "pelican-userdb:3306",
+  "db_name": "pelicanuser",
+  "db_user": "pelicanuser",
+  "db_password": "YOUR_DB_PASSWORD",
+  "templates": {
+    "test": {
+      "user_id": 1,
+      "egg_id": 1,
+      "mount_id": 1,
+      "template_name": "test",
+      "instance_template_mount": "/home/mount",
+      "media_pool": "lobby",
+      "location_ids": [1],
+      "public": true,
+      "internal_port": 30000,
+      "server_description": "Test template using mineclonia from /mounts/test"
+    }
+  }
+}

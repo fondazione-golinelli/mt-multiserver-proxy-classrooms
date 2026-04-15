@@ -42,6 +42,7 @@ type applicationEnvelope[T any] struct {
 
 type applicationServer struct {
 	ID         int    `json:"id"`
+	ExternalID string `json:"external_id"`
 	UUID       string `json:"uuid"`
 	Identifier string `json:"identifier"`
 	Node       int    `json:"node"`
@@ -128,7 +129,7 @@ func (c *controller) createServer(ctx context.Context, playerName string, tpl te
 			"COMMUNITY_GAME_NAME":     "",
 			"SERVER_DESC":             tpl.ServerDescription,
 			"SERVER_DOMAIN":           tpl.ServerDomain,
-			"DEFAULT_GAME":            tpl.DefaultGame,
+			"DEFAULT_GAME":            c.cfg.DefaultGame,
 			"MINETEST_GAME_PATH":      "/home/container/.luanti/games",
 			"SERVER_MAX_USERS":        tpl.ServerMaxUsers,
 			"SERVER_MOTD":             tpl.ServerMOTD,
@@ -138,6 +139,8 @@ func (c *controller) createServer(ctx context.Context, playerName string, tpl te
 			"SERVER_URL":              tpl.ServerURL,
 			"SERVER_ANNOUNCE":         fmt.Sprintf("%t", tpl.ServerAnnounce),
 			"WORLD_NAME":              tpl.WorldName,
+			"SERVER_PORT":             fmt.Sprintf("%d", tpl.InternalPort),
+			"BIND_ADDR":               "0.0.0.0",
 		},
 		Limits:        tpl.Limits,
 		FeatureLimits: tpl.FeatureLimits,

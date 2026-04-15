@@ -1,19 +1,19 @@
 # Classrooms Plugin — Progress Tracker
 
-## Status: Phase 1 Complete — Ready for Phase 2
+## Status: All Phases Complete — Ready for Testing
 
 ### Phase Overview
 
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 1 | Scaffold + Data Model | **Complete** |
-| 2 | Instance Lifecycle | Not Started |
-| 3 | Access Control | Not Started |
-| 4 | Chat Commands | Not Started |
-| 5 | Teacher Formspecs | Not Started |
-| 6 | Admin Formspecs | Not Started |
-| 7 | Mod Channel + Join/Leave | Not Started |
-| 8 | Bridge Lua Mod | Not Started |
+| 2 | Instance Lifecycle | **Complete** |
+| 3 | Access Control | **Complete** |
+| 4 | Chat Commands | **Complete** |
+| 5 | Teacher Formspecs | **Complete** |
+| 6 | Admin Formspecs | **Complete** |
+| 7 | Mod Channel + Join/Leave | **Complete** |
+| 8 | Bridge Lua Mod | **Complete** |
 
 ---
 
@@ -28,48 +28,45 @@
 
 ### Phase 2: Instance Lifecycle
 
-- [ ] `instance.go` — provisionInstance, startInstance, stopInstance, deleteInstance
-- [ ] Startup reconciliation (re-register running instances)
-- [ ] Background status check goroutine
+- [x] `instance.go` — provisionInstance, startInstance, stopInstance, deleteInstance
+- [x] Startup reconciliation (re-register running instances)
+- [x] Background status check goroutine
 
 ### Phase 3: Access Control
 
-- [ ] `access.go` — isAllowedToHop() logic
-- [ ] Intercept /join and >join commands
+- [x] `access.go` — isAllowedToHop() logic
+- [x] Intercept /join and >join commands
 
 ### Phase 4: Chat Commands
 
-- [ ] `commands.go` — >classes, >admin, >freeze/unfreeze, >teacher_add/remove/list, >lobby
-- [ ] Slash command interceptors (/classes, /admin, /freeze, /lobby)
+- [x] `commands.go` — >classes, >admin, >freeze/unfreeze, >teacher_add/remove/list, >lobby
+- [x] Slash command interceptors (/classes, /admin, /freeze, /lobby)
 
 ### Phase 5: Teacher Formspecs
 
-- [ ] `formspec.go` — port existing screens (main, class, students, tp_selector)
-- [ ] `formspec.go` — add classrooms:create_instance (template picker)
-- [ ] `formspec.go` — add classrooms:instance (instance detail view)
-- [ ] `handlers.go` — port existing handlers
-- [ ] `handlers.go` — add instance creation/management handlers
-- [ ] Class view extended with INSTANCES section
+- [x] `formspec.go` — port existing screens (main, class, students, tp_selector)
+- [x] `formspec.go` — add classrooms:create_instance (template picker)
+- [x] `formspec.go` — add classrooms:instance (instance detail view)
+- [x] `handlers.go` — port existing handlers
+- [x] `handlers.go` — add instance creation/management handlers
+- [x] Class view extended with INSTANCES section
 
 ### Phase 6: Admin Formspecs
 
-- [ ] classrooms:admin panel (all instances, teachers, templates)
-- [ ] classrooms:admin_create (create from any template)
+- [x] classrooms:admin panel (all instances, teachers, templates)
+- [x] classrooms:admin_create (create from any template)
 
 ### Phase 7: Mod Channel + Join/Leave
 
-- [ ] `modchan.go` — merge both plugins' channel handling
-- [ ] Join/leave hooks (re-apply freeze, ensure channel join)
+- [x] `modchan.go` — merge both plugins' channel handling
+- [x] Join/leave hooks (re-apply freeze, ensure channel join)
 
 ### Phase 8: Luanti Bridge Mod (`classrooms_bridge`)
 
-Merges `pelican_multiserver_bridge` + `teacher_tools_bridge` into one Luanti mod.
-Location: `/home/docker/compose/pelican/development/luanti/plugins/classrooms_bridge/`
-
-- [ ] `classrooms_bridge/mod.conf`
-- [ ] `classrooms_bridge/init.lua` — mod channel listener + action handlers (freeze/unfreeze/watch/gather/tp/broadcast)
-- [ ] Update mod channel name to `classrooms:cmd`
-- [ ] Keep in sync with proxy plugin as new actions are added
+- [x] `classrooms_bridge/mod.conf`
+- [x] `classrooms_bridge/init.lua` — mod channel listener + action handlers (freeze/unfreeze/watch/gather/tp/broadcast/ping)
+- [x] Update mod channel name to `classrooms:cmd`
+- [x] Smoother watching loop (globalstep)
 
 ---
 
@@ -86,3 +83,5 @@ Location: `/home/docker/compose/pelican/development/luanti/plugins/classrooms_br
 | 2026-04-15 | Formspec UI for everything | Teachers and admins manage from within Luanti |
 | 2026-04-15 | Class members auto-join, others by invite | Access control at hop level |
 | 2026-04-15 | New git repo for classrooms plugin | github.com/fondazione-golinelli/mt-multiserver-proxy-classrooms |
+| 2026-04-15 | Use UUID:port for backend address | Works with Docker container networking where UUID is hostname |
+| 2026-04-15 | Re-apply state in onChatMsg(join) | Workaround for proxy lack of post-hop hook |
