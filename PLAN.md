@@ -26,7 +26,8 @@ The goal is a single plugin that lets teachers manage classes, provision persist
 mt-multiserver-proxy-classrooms/
   go.mod
   main.go          -- init, unified config, controller struct
-  state.go         -- data model, persistence, CRUD methods
+  db.go            -- MySQL connection, auto-migration, query helpers
+  state.go         -- CRUD methods (teachers, classes, students, instances) using db.go
   pelican.go       -- Pelican/Wings API client (extracted from pelican-bridge)
   instance.go      -- instance lifecycle: provision, start, stop, delete, reconcile
   commands.go      -- chat commands (>classes, >admin, >freeze, >lobby, etc.)
@@ -38,7 +39,8 @@ mt-multiserver-proxy-classrooms/
 
 ### Reuse Sources
 - `pelican.go` <- extracted from `mt-multiserver-proxy-pelican-bridge/main.go` (lines 805-1065: all API methods, types)
-- `state.go` <- extended from `mt-multiserver-proxy-teachertools/state.go` (add instanceData)
+- `state.go` <- rewritten: same CRUD interface as teachertools but backed by MySQL instead of JSON
+- `db.go` <- new: MySQL connection pool, auto-migration, query helpers
 - `formspec.go` <- extended from `mt-multiserver-proxy-teachertools/formspec.go` (add instance screens)
 - `handlers.go` <- extended from `mt-multiserver-proxy-teachertools/handlers.go` (add instance handlers)
 - `modchan.go` <- merged from both plugins' modchan/join-leave logic
@@ -57,41 +59,85 @@ type classroomsConfig struct {
     PollIntervalSeconds, PollTimeoutSeconds          int
     StartGraceSeconds, JoinRetryCount, JoinRetryDelayMillis int
 
-    // State persistence (from teachertools)
-    DataFile string
+    // MySQL database
+    DBHost     string // e.g. "userdb:3306"
+    DBName     string
+    DBUser     string
+    DBPassword string
+    DBPasswordFile string // alternative: read password from file
 
     // Templates — each has a new `Public bool` field
     Templates map[string]templateConfig
 }
 ```
 
-### Persisted State (`stateData`)
-```go
-type stateData struct {
-    Teachers  map[string]bool           // username -> true
-    Classes   map[string]*classData     // className -> data
-    Instances map[string]*instanceData  // instanceID -> data
-}
+### Database Schema (MySQL, auto-migrated on startup)
 
+```sql
+CREATE TABLE teachers (
+    username     VARCHAR(50) PRIMARY KEY,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE classes (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    name         VARCHAR(100) NOT NULL UNIQUE,
+    created_by   VARCHAR(50) NOT NULL,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES teachers(username)
+);
+
+CREATE TABLE class_students (
+    class_id     INT NOT NULL,
+    username     VARCHAR(50) NOT NULL,
+    PRIMARY KEY (class_id, username),
+    FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
+);
+
+CREATE TABLE instances (
+    id            VARCHAR(100) PRIMARY KEY,  -- e.g. "math-alice-20260415-a3f2"
+    class_id      INT,                       -- NULL = standalone admin instance
+    created_by    VARCHAR(50) NOT NULL,
+    template_name VARCHAR(100) NOT NULL,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    server_id     INT NOT NULL,              -- Pelican server ID
+    uuid          VARCHAR(36) NOT NULL,      -- Pelican server UUID
+    node_id       INT NOT NULL,              -- Pelican node ID
+    proxy_name    VARCHAR(200) NOT NULL,     -- registered in proxy
+    backend_addr  VARCHAR(200) NOT NULL,     -- host:port
+    status        VARCHAR(20) NOT NULL DEFAULT 'provisioning',
+    FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE SET NULL
+);
+
+CREATE TABLE instance_invites (
+    instance_id  VARCHAR(100) NOT NULL,
+    username     VARCHAR(50) NOT NULL,
+    PRIMARY KEY (instance_id, username),
+    FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE
+);
+```
+
+### Go Structs (mapped from DB rows)
+```go
 type classData struct {
-    Students  []string
+    ID        int
+    Name      string
     CreatedBy string
-    CreatedAt int64
+    CreatedAt time.Time
 }
 
 type instanceData struct {
-    InstanceID     string   // unique key
-    ClassName      string   // bound class ("" = standalone admin instance)
-    CreatedBy      string   // teacher or admin
-    TemplateName   string
-    CreatedAt      int64
-    ServerID       int      // Pelican server ID
-    UUID           string   // Pelican server UUID
-    NodeID         int      // Pelican node ID
-    ProxyName      string   // registered proxy server name
-    BackendAddr    string   // host:port
-    Status         string   // "provisioning" | "running" | "stopped" | "deleted"
-    InvitedPlayers []string // players beyond class members
+    ID            string
+    ClassID       *int     // nil = standalone
+    CreatedBy     string
+    TemplateName  string
+    CreatedAt     time.Time
+    ServerID      int
+    UUID          string
+    NodeID        int
+    ProxyName     string
+    BackendAddr   string
+    Status        string   // "provisioning" | "running" | "stopped" | "deleted"
 }
 ```
 
@@ -107,6 +153,8 @@ type runtimeState struct {
 ```
 
 All runtime maps protected by `controller.mu` (fixes existing race condition with package-level maps).
+
+Driver: `database/sql` + `github.com/go-sql-driver/mysql`. Auto-migrate on startup (CREATE TABLE IF NOT EXISTS).
 
 ---
 
@@ -176,7 +224,8 @@ func isAllowedToHop(playerName, serverName string) bool {
 ### Phase 1: Scaffold + Data Model
 - Create `mt-multiserver-proxy-classrooms/` with `go.mod`
 - `main.go` — unified config loader, `controller` struct, `init()` that registers everything
-- `state.go` — all structs, load/save JSON, all CRUD methods (teachers, classes, students, instances)
+- `db.go` — MySQL connection pool, auto-migration (CREATE TABLE IF NOT EXISTS), prepared helpers
+- `state.go` — all CRUD methods backed by MySQL (teachers, classes, students, instances, invites)
 - `pelican.go` — extract all Pelican API code from pelican-bridge verbatim, add `stopDaemonServer`
 - Verify: `go build -buildmode=plugin`
 

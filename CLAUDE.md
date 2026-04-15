@@ -28,7 +28,8 @@ mt-multiserver-proxy (lobby = default server)
 | File | Responsibility |
 |------|---------------|
 | `main.go` | Plugin init, unified config, controller struct |
-| `state.go` | Data model, JSON persistence, all CRUD methods |
+| `db.go` | MySQL connection, auto-migration, query helpers |
+| `state.go` | CRUD methods for teachers, classes, students, instances (uses db.go) |
 | `pelican.go` | Pelican panel + Wings daemon HTTP API client |
 | `instance.go` | Instance lifecycle: provision, start, stop, delete, reconcile |
 | `commands.go` | Chat commands (`>classes`, `>admin`, `>freeze`, etc.) |
@@ -83,11 +84,16 @@ The proxy provides plugin hooks via package-level functions:
 
 ## Config
 
-Single JSON file at `plugins/classrooms/config.json`. Combines Pelican API settings with template definitions. Templates have a `public` bool — non-public templates are admin-only.
+Single JSON file at `plugins/classrooms/config.json`. Combines Pelican API settings, MySQL connection details, and template definitions. Templates have a `public` bool — non-public templates are admin-only.
 
-## State Persistence
+## Database
 
-`plugins/classrooms/data.json` — teachers, classes, students, and instance records. Saved on every mutation. Runtime-only state (freeze/watch maps) is not persisted.
+MySQL via `database/sql` + `github.com/go-sql-driver/mysql`. Tables auto-created on startup.
+
+- **Host**: Pelican-provisioned MySQL database (accessible as `userdb:3306` from within Pelican containers)
+- **Tables**: `teachers`, `classes`, `class_students`, `instances`, `instance_invites`
+- **Driver**: standard `database/sql` — no ORM
+- **Runtime-only state** (freeze/watch maps) is NOT in the database — kept in-memory on the controller struct
 
 ## Related Components
 

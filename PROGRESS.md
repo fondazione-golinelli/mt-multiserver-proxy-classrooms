@@ -1,12 +1,12 @@
 # Classrooms Plugin — Progress Tracker
 
-## Status: Phase 1 — Scaffold + Data Model
+## Status: Phase 1 Complete — Ready for Phase 2
 
 ### Phase Overview
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 1 | Scaffold + Data Model | **In Progress** |
+| 1 | Scaffold + Data Model | **Complete** |
 | 2 | Instance Lifecycle | Not Started |
 | 3 | Access Control | Not Started |
 | 4 | Chat Commands | Not Started |
@@ -19,11 +19,12 @@
 
 ### Phase 1: Scaffold + Data Model
 
-- [ ] `go.mod` — module init with proxy dependency
-- [ ] `main.go` — unified config loader, controller struct, `init()`
-- [ ] `state.go` — data model structs, JSON persistence, all CRUD methods
-- [ ] `pelican.go` — Pelican/Wings API client extracted from pelican-bridge
-- [ ] Verify: `go build -buildmode=plugin` compiles
+- [x] `go.mod` — module init with proxy + mysql driver dependencies
+- [x] `main.go` — unified config loader, controller struct, `init()`
+- [x] `db.go` — MySQL connection pool, auto-migration (CREATE TABLE IF NOT EXISTS)
+- [x] `state.go` — CRUD methods backed by MySQL (teachers, classes, students, instances, invites, runtime state)
+- [x] `pelican.go` — Pelican/Wings API client (create, fetch, mount, reinstall, delete, start/stop/kill daemon)
+- [x] Verify: `go build -buildmode=plugin` compiles cleanly
 
 ### Phase 2: Instance Lifecycle
 
