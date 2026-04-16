@@ -212,7 +212,6 @@ func loadConfig() (classroomsConfig, error) {
 		path, ok = firstExistingPath(
 			filepath.Join(proxy.Path("plugins"), pluginName, "config.json"),
 			filepath.Join(proxy.Path("plugins"), pluginName+".json"),
-			"config.json",
 			pluginName+".json",
 		)
 		if !ok {
