@@ -88,7 +88,7 @@ Single JSON at `plugins/classrooms/config.json` (or `$CLASSROOMS_CONFIG`, or `pl
 
 **Template fields**: `user_id`, `egg_id`, `mount_id` (or `mount_ids`), `template_name`, `location_ids`, `media_pool` are required. Many defaults are filled in by `validateTemplate` (e.g. `internal_port=30000`, `world_name="world"`, `instance_template_mount="/home/mount"`). `public: true` makes a template visible to non-admin teachers.
 
-**Timing defaults** (all overridable): `poll_interval_seconds=2`, `poll_timeout_seconds=180`, `start_grace_seconds=2`, `join_retry_count=12`, `join_retry_delay_millis=1000`.
+**Timing defaults** (all overridable): `poll_interval_seconds=1`, `poll_timeout_seconds=180`, `start_grace_seconds=0`, `join_retry_count=12`, `join_retry_delay_millis=1000`. `start_grace_seconds` may be set to `0` for immediate proxy registration after Wings reports the daemon as `running`.
 
 ## Database
 
@@ -103,9 +103,29 @@ MySQL via `database/sql` + `github.com/go-sql-driver/mysql`. Tables auto-created
 
 **Do not build the plugin on the host.** Go plugins are linked against the exact Go toolchain, libc, and proxy binary they will run with; a `.so` produced outside the proxy container will fail to load (symbol/ABI mismatch) even if `go build` succeeds.
 
-**How it actually builds**: the proxy container compiles plugins itself on startup from the sources in the mounted `plugins/` folder. To pick up changes, just commit/update the sources in `plugins/mt-multiserver-proxy-classrooms/` and restart the proxy container — it will rebuild the `.so` in-place.
+**How it actually builds**: the proxy container compiles plugins itself on startup from the sources in the mounted `plugins/` folder. To pick up plugin-source changes, just update the sources in `plugins/mt-multiserver-proxy-classrooms/` and restart the proxy container — it will rebuild the `.so` in-place.
 
 The host-side `build-plugins.sh` and `go build -buildmode=plugin` commands are only useful as a compile check (catch syntax/type errors quickly); the resulting `.so` must not be deployed to the container.
+
+### Don't hand-edit `go.mod` for the proxy version
+
+On every startup the proxy's `openPlugins` → `BuildPlugin` ([source/plugin.go](../../source/plugin.go)) runs `go get github.com/HimbeerserverDE/mt-multiserver-proxy@<proxy_version>` in the plugin dir, then `go mod tidy`, then `go build -buildmode=plugin`. This **overwrites `go.mod`** to pin whatever version the running proxy binary itself has. So:
+
+- Editing the pseudo-version in `go.mod` by hand is pointless — it gets reset on the next restart.
+- To ship a proxy-source change, you must update the **proxy binary**, not the plugin.
+
+### Updating the proxy binary
+
+The entrypoint installs the proxy with `go install ...@${PROXY_PROXY_VERSION:-latest}` and caches it in `/home/container/.cache/gobin/` with a `.version` marker file ([docker/entrypoint.sh:47-68](../../docker/entrypoint.sh#L47-L68)). If the marker matches the requested version it skips the install, so pushing a new commit to the fork is not enough by itself.
+
+To force a rebuild at the latest fork HEAD:
+
+```bash
+rm /home/docker/compose/pelican/wings/pelican/volumes/31e73bd5-18e5-4730-8ea3-1ba2fa1e1654/.cache/gobin/.version
+# then restart the proxy container via Pelican panel
+```
+
+`GOPRIVATE` + the `insteadOf` rule in the Dockerfile make `go install` hit the `fondazione-golinelli` fork directly, so `@latest` resolves to the fork's default branch HEAD. Alternatively, pin a specific pseudo-version with the `PROXY_PROXY_VERSION` env var on the Pelican server — timestamps in pseudo-versions are **UTC** (see proxy's own error: `invalid pseudo-version: does not match version-control timestamp`).
 
 ## Proxy API Patterns Used
 

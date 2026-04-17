@@ -23,9 +23,9 @@ const modChannel = "classrooms:cmd"
 // ── Config ──────────────────────────────────────────────────────────────────
 
 const (
-	defaultPollIntervalSeconds = 2
+	defaultPollIntervalSeconds = 1
 	defaultPollTimeoutSeconds  = 180
-	defaultStartGraceSeconds   = 2
+	defaultStartGraceSeconds   = 0
 	defaultJoinRetryCount      = 12
 	defaultJoinRetryDelayMS    = 1000
 	defaultInternalPort        = 30000
@@ -287,7 +287,7 @@ func loadConfig() (classroomsConfig, error) {
 	if cfg.PollTimeoutSeconds <= 0 {
 		cfg.PollTimeoutSeconds = defaultPollTimeoutSeconds
 	}
-	if cfg.StartGraceSeconds <= 0 {
+	if cfg.StartGraceSeconds < 0 {
 		cfg.StartGraceSeconds = defaultStartGraceSeconds
 	}
 	if cfg.JoinRetryCount <= 0 {

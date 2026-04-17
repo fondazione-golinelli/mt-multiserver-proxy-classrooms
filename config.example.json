@@ -7,6 +7,8 @@
   "db_name": "pelicanuser",
   "db_user": "pelicanuser",
   "db_password": "YOUR_DB_PASSWORD",
+  "poll_interval_seconds": 1,
+  "start_grace_seconds": 0,
   "templates": {
     "test": {
       "user_id": 1,
