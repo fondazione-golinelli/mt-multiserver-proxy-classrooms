@@ -13,6 +13,9 @@ func (c *controller) registerHandlers() {
 	proxy.RegisterOnPlayerReceiveFields("classrooms:main", c.handleMainDashboard)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:class", c.handleClassView)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:template_picker", c.handleTemplatePicker)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:instance_progress", c.handleInstanceProgress)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:instance_ready", c.handleInstanceReady)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:instance_error", c.handleInstanceError)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:instance", c.handleInstanceView)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:admin", c.handleAdminPanel)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:students", c.handleStudentEditor)
@@ -28,6 +31,29 @@ func fieldMap(fields []mt.Field) map[string]string {
 
 func (c *controller) notify(cc *proxy.ClientConn, msg string) {
 	cc.SendChatMsg("[Classrooms] " + msg)
+}
+
+func (c *controller) showParentForInstance(cc *proxy.ClientConn, inst *instanceData) {
+	if inst != nil && inst.ClassID != nil {
+		c.showClassView(cc, *inst.ClassID)
+		return
+	}
+	c.showAdminPanel(cc)
+}
+
+func (c *controller) hopClassToInstance(cc *proxy.ClientConn, inst *instanceData, includeTeacher bool) {
+	if inst == nil || inst.ClassID == nil {
+		return
+	}
+	if includeTeacher {
+		_ = cc.Hop(inst.ProxyName)
+	}
+	students := c.getOnlineStudents(*inst.ClassID)
+	for _, s := range students {
+		if scc := proxy.Find(s); scc != nil {
+			_ = scc.Hop(inst.ProxyName)
+		}
+	}
 }
 
 // ── Main Dashboard Handler ──────────────────────────────────────────────────
@@ -165,27 +191,89 @@ func (c *controller) handleTemplatePicker(cc *proxy.ClientConn, fields []mt.Fiel
 	for k := range fm {
 		if strings.HasPrefix(k, "pick_tpl_") {
 			tName := strings.TrimPrefix(k, "pick_tpl_")
-			c.notify(cc, "Provisioning instance from template "+tName+"...")
-			
+			player := cc.Name()
+			if !c.beginOp(player) {
+				c.notify(cc, "Another server operation is already running. Please wait for it to finish.")
+				return
+			}
+
 			var pClassID *int
-			if hasClass { pClassID = &classID }
-			
+			if hasClass {
+				classIDCopy := classID
+				pClassID = &classIDCopy
+			}
+
+			c.showInstanceProgress(cc, "Creating server", "Provisioning a new "+tName+" instance.")
+
 			go func() {
-				inst, err := c.provisionInstance(pClassID, cc.Name(), tName)
-				if err != nil {
-					c.notify(cc, "Provisioning failed: "+err.Error())
+				defer c.endOp(player)
+
+				inst, err := c.provisionInstance(pClassID, player, tName)
+				liveCC := proxy.Find(player)
+				if liveCC == nil {
 					return
 				}
-				c.notify(cc, "Instance "+inst.ProxyName+" is ready.")
+				if err != nil {
+					c.showInstanceError(liveCC, inst, "Server creation failed", err.Error())
+					return
+				}
+				c.showInstanceReady(liveCC, inst, "Server ready")
 			}()
-			
-			if hasClass {
-				c.showClassView(cc, classID)
-			} else {
-				c.showAdminPanel(cc)
-			}
+
 			return
 		}
+	}
+}
+
+// ── Instance Operation Dialog Handlers ──────────────────────────────────────
+
+func (c *controller) handleInstanceProgress(cc *proxy.ClientConn, fields []mt.Field) {
+	fm := fieldMap(fields)
+	if _, ok := fm["btn_progress_close"]; ok {
+		return
+	}
+}
+
+func (c *controller) handleInstanceReady(cc *proxy.ClientConn, fields []mt.Field) {
+	instID, ok := c.getActiveInstance(cc.Name())
+	if !ok {
+		c.showMainDashboard(cc)
+		return
+	}
+	inst, _ := c.getInstanceByID(instID)
+	if inst == nil {
+		c.showMainDashboard(cc)
+		return
+	}
+
+	fm := fieldMap(fields)
+	if _, ok := fm["btn_ready_hop_me"]; ok {
+		_ = cc.Hop(inst.ProxyName)
+		return
+	}
+	if _, ok := fm["btn_ready_hop_class"]; ok {
+		c.hopClassToInstance(cc, inst, true)
+		return
+	}
+	if _, ok := fm["btn_ready_open"]; ok {
+		c.showInstanceView(cc, inst.ID)
+		return
+	}
+	if _, ok := fm["btn_ready_close"]; ok {
+		return
+	}
+}
+
+func (c *controller) handleInstanceError(cc *proxy.ClientConn, fields []mt.Field) {
+	fm := fieldMap(fields)
+	if _, ok := fm["btn_error_open"]; ok {
+		if instID, ok := c.getActiveInstance(cc.Name()); ok {
+			c.showInstanceView(cc, instID)
+			return
+		}
+	}
+	if _, ok := fm["btn_error_close"]; ok {
+		return
 	}
 }
 
@@ -201,22 +289,37 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 	fm := fieldMap(fields)
 
 	if _, ok := fm["btn_back"]; ok {
-		if inst != nil && inst.ClassID != nil {
-			c.showClassView(cc, *inst.ClassID)
-		} else {
-			c.showAdminPanel(cc)
-		}
+		c.showParentForInstance(cc, inst)
 		return
 	}
 
 	if _, ok := fm["btn_inst_start"]; ok && inst != nil {
-		c.notify(cc, "Starting instance...")
+		player := cc.Name()
+		if !c.beginOp(player) {
+			c.notify(cc, "Another server operation is already running. Please wait for it to finish.")
+			return
+		}
+
+		c.showInstanceProgress(cc, "Starting server", "Starting "+inst.ProxyName+".")
 		go func() {
+			defer c.endOp(player)
+
 			if err := c.startInstance(inst); err != nil {
-				c.notify(cc, "Start failed: "+err.Error())
+				if liveCC := proxy.Find(player); liveCC != nil {
+					c.showInstanceError(liveCC, inst, "Server start failed", err.Error())
+				}
+				return
 			}
+			liveCC := proxy.Find(player)
+			if liveCC == nil {
+				return
+			}
+			updated, err := c.getInstanceByID(inst.ID)
+			if err == nil && updated != nil {
+				inst = updated
+			}
+			c.showInstanceReady(liveCC, inst, "Server ready")
 		}()
-		c.showInstanceView(cc, instID)
 		return
 	}
 
@@ -252,12 +355,7 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 	}
 
 	if _, ok := fm["btn_hop_class"]; ok && inst != nil && inst.ClassID != nil {
-		students := c.getOnlineStudents(*inst.ClassID)
-		for _, s := range students {
-			if scc := proxy.Find(s); scc != nil {
-				scc.Hop(inst.ProxyName)
-			}
-		}
+		c.hopClassToInstance(cc, inst, false)
 		return
 	}
 

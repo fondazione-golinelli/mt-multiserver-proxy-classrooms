@@ -95,7 +95,7 @@ func (c *controller) showMainDashboard(cc *proxy.ClientConn) {
 			b.WriteString(fmt.Sprintf("label[0.5,%g;%s]", y+0.4,
 				fmtEsc(mcColorize(light, cls.Name)+
 					mcColorize(muted, fmt.Sprintf("  (%d/%d online)", online, len(students))))))
-			
+
 			b.WriteString(fmt.Sprintf("button[8.0,%g;1.8,0.8;open_class_%d;Open]", y+0.1, cls.ID))
 			b.WriteString(fmt.Sprintf("button[10.0,%g;1.8,0.8;del_class_%d;%s]", y+0.1, cls.ID, fmtEsc(mcColorize(danger, "Delete"))))
 			y += 1.2
@@ -139,7 +139,7 @@ func (c *controller) showClassView(cc *proxy.ClientConn, classID int) {
 	// Left Column: Student Controls (6 units wide)
 	b.WriteString(coloredLbl(0.5, 1.5, muted, "STUDENTS"))
 	b.WriteString(box(0.3, 1.8, 6.2, 9.2, panel))
-	
+
 	b.WriteString(btn(0.5, 2.0, 2.8, 0.7, "btn_freeze_all", "Freeze All"))
 	b.WriteString(btn(3.5, 2.0, 2.8, 0.7, "btn_unfreeze_all", "Unfreeze All"))
 	b.WriteString(btn(0.5, 2.8, 2.8, 0.7, "btn_watch_teacher", "Watch Me"))
@@ -152,11 +152,13 @@ func (c *controller) showClassView(cc *proxy.ClientConn, classID int) {
 	for _, s := range students {
 		online := proxy.Find(s) != nil
 		statusColor := muted
-		if online { statusColor = success }
-		
+		if online {
+			statusColor = success
+		}
+
 		b.WriteString(box(0, sy, 5.5, 0.8, headerColor))
 		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", sy+0.35, fmtEsc(mcColorize(statusColor, s))))
-		
+
 		if online {
 			b.WriteString(fmt.Sprintf("button[3.2,%g;1.0,0.6;tp_to_%s;TP]", sy+0.1, fmtEsc(s)))
 			b.WriteString(fmt.Sprintf("button[4.3,%g;1.0,0.6;watch_%s;Eye]", sy+0.1, fmtEsc(s)))
@@ -175,15 +177,18 @@ func (c *controller) showClassView(cc *proxy.ClientConn, classID int) {
 	for _, inst := range instances {
 		statusColor := muted
 		switch inst.Status {
-		case "running": statusColor = success
-		case "provisioning": statusColor = warning
-		case "stopped": statusColor = danger
+		case "running":
+			statusColor = success
+		case "provisioning":
+			statusColor = warning
+		case "stopped":
+			statusColor = danger
 		}
 
 		b.WriteString(box(0, iy, 6.2, 1.2, headerColor))
 		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", iy+0.35, fmtEsc(mcColorize(light, inst.TemplateName))))
 		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", iy+0.75, fmtEsc(mcColorize(statusColor, inst.Status))))
-		
+
 		b.WriteString(fmt.Sprintf("button[4.0,%g;2.0,0.8;open_inst_%s;Manage]", iy+0.2, fmtEsc(inst.ID)))
 		iy += 1.4
 	}
@@ -226,6 +231,87 @@ func (c *controller) showTemplatePicker(cc *proxy.ClientConn, classID *int) {
 	cc.ShowFormspec("classrooms:template_picker", b.String())
 }
 
+// ── Instance Operation Dialogs ──────────────────────────────────────────────
+
+func (c *controller) showInstanceProgress(cc *proxy.ClientConn, title, detail string) {
+	var b strings.Builder
+	b.WriteString("formspec_version[6]")
+	b.WriteString("size[9,5.5]")
+	b.WriteString(fmt.Sprintf("bgcolor[%s;true]", headerColor))
+
+	b.WriteString(box(0, 0, 9, 1.1, panel))
+	b.WriteString(coloredLbl(0.5, 0.5, warning, "| "))
+	b.WriteString(coloredLbl(0.9, 0.5, light, title))
+	b.WriteString(box(0, 1.1, 9, 0.05, warning))
+
+	b.WriteString(box(0.5, 1.6, 8, 2.7, panel))
+	b.WriteString(coloredLbl(0.9, 2.2, light, detail))
+	b.WriteString(coloredLbl(0.9, 2.9, muted, "You can close this window. The operation will keep running."))
+	b.WriteString(coloredLbl(0.9, 3.5, muted, "A new window will open when the server is ready."))
+
+	b.WriteString(btnExit(3.0, 4.5, 3.0, 0.7, "btn_progress_close", "Close"))
+	cc.ShowFormspec("classrooms:instance_progress", b.String())
+}
+
+func (c *controller) showInstanceReady(cc *proxy.ClientConn, inst *instanceData, title string) {
+	if inst == nil {
+		return
+	}
+	c.setActiveInstance(cc.Name(), inst.ID)
+
+	var b strings.Builder
+	b.WriteString("formspec_version[6]")
+	b.WriteString("size[10,7]")
+	b.WriteString(fmt.Sprintf("bgcolor[%s;true]", headerColor))
+
+	b.WriteString(box(0, 0, 10, 1.1, panel))
+	b.WriteString(coloredLbl(0.5, 0.5, success, "| "))
+	b.WriteString(coloredLbl(0.9, 0.5, light, title))
+	b.WriteString(box(0, 1.1, 10, 0.05, success))
+
+	b.WriteString(box(0.5, 1.6, 9, 2.3, panel))
+	b.WriteString(coloredLbl(0.9, 2.1, light, inst.ProxyName))
+	b.WriteString(coloredLbl(0.9, 2.7, muted, "Template: "+inst.TemplateName))
+	b.WriteString(coloredLbl(0.9, 3.3, muted, "The server is running and available in the proxy."))
+
+	b.WriteString(box(0.5, 4.3, 9, 1.8, panel))
+	b.WriteString(btn(0.9, 4.7, 2.6, 0.8, "btn_ready_hop_me", "Hop Me Here"))
+	if inst.ClassID != nil {
+		b.WriteString(btn(3.7, 4.7, 2.6, 0.8, "btn_ready_hop_class", "Bring Class"))
+	}
+	b.WriteString(btn(6.5, 4.7, 2.6, 0.8, "btn_ready_open", "Manage"))
+	b.WriteString(btnExit(3.7, 6.2, 2.6, 0.6, "btn_ready_close", "Close"))
+
+	cc.ShowFormspec("classrooms:instance_ready", b.String())
+}
+
+func (c *controller) showInstanceError(cc *proxy.ClientConn, inst *instanceData, title, detail string) {
+	if inst != nil {
+		c.setActiveInstance(cc.Name(), inst.ID)
+	}
+
+	var b strings.Builder
+	b.WriteString("formspec_version[6]")
+	b.WriteString("size[10,7]")
+	b.WriteString(fmt.Sprintf("bgcolor[%s;true]", headerColor))
+
+	b.WriteString(box(0, 0, 10, 1.1, panel))
+	b.WriteString(coloredLbl(0.5, 0.5, danger, "| "))
+	b.WriteString(coloredLbl(0.9, 0.5, light, title))
+	b.WriteString(box(0, 1.1, 10, 0.05, danger))
+
+	b.WriteString(box(0.5, 1.6, 9, 3.3, panel))
+	b.WriteString(coloredLbl(0.9, 2.1, light, "The server operation did not complete."))
+	b.WriteString(fmt.Sprintf("textarea[0.9,2.7;8.2,1.7;error_detail;;%s]", fmtEsc(detail)))
+
+	if inst != nil {
+		b.WriteString(btn(1.0, 5.4, 2.6, 0.8, "btn_error_open", "Manage"))
+	}
+	b.WriteString(btnExit(6.4, 5.4, 2.6, 0.8, "btn_error_close", "Close"))
+
+	cc.ShowFormspec("classrooms:instance_error", b.String())
+}
+
 // ── Instance Detail View ────────────────────────────────────────────────────
 
 func (c *controller) showInstanceView(cc *proxy.ClientConn, instanceID string) {
@@ -250,19 +336,22 @@ func (c *controller) showInstanceView(cc *proxy.ClientConn, instanceID string) {
 	b.WriteString(box(0.5, 1.5, 9, 3, panel))
 	b.WriteString(coloredLbl(0.8, 2.0, muted, "Template: "+inst.TemplateName))
 	b.WriteString(coloredLbl(0.8, 2.5, muted, "Creator:  "+inst.CreatedBy))
-	
+
 	statusColor := muted
 	switch inst.Status {
-	case "running": statusColor = success
-	case "provisioning": statusColor = warning
-	case "stopped": statusColor = danger
+	case "running":
+		statusColor = success
+	case "provisioning":
+		statusColor = warning
+	case "stopped":
+		statusColor = danger
 	}
 	b.WriteString(fmt.Sprintf("label[0.8,3.0;%s]", fmtEsc(mcColorize(muted, "Status:   ")+mcColorize(statusColor, inst.Status))))
 	b.WriteString(coloredLbl(0.8, 3.5, muted, "Address:  "+inst.ProxyName))
 
 	// Controls
 	b.WriteString(box(0.5, 4.8, 9, 4.5, panel))
-	
+
 	if inst.Status == "running" {
 		b.WriteString(btn(1.0, 5.2, 3.5, 0.8, "btn_inst_stop", "Stop Server"))
 		b.WriteString(btn(5.5, 5.2, 3.5, 0.8, "btn_hop_me", "Hop Me Here"))
@@ -272,7 +361,7 @@ func (c *controller) showInstanceView(cc *proxy.ClientConn, instanceID string) {
 	} else if inst.Status == "stopped" {
 		b.WriteString(btn(1.0, 5.2, 3.5, 0.8, "btn_inst_start", "Start Server"))
 	}
-	
+
 	b.WriteString(btn(1.0, 8.2, 3.5, 0.8, "btn_inst_delete", mcColorize(danger, "Delete Instance")))
 
 	// Invites
@@ -321,7 +410,7 @@ func (c *controller) showAdminPanel(cc *proxy.ClientConn) {
 	// Teachers list (Right)
 	b.WriteString(coloredLbl(8.8, 1.5, muted, "TEACHERS"))
 	b.WriteString(box(8.5, 1.8, 5.2, 7.5, panel))
-	
+
 	b.WriteString("field[8.7,2.1;3.5,0.7;new_teacher_name;;]")
 	b.WriteString(btn(12.3, 2.1, 1.2, 0.7, "btn_admin_add_teacher", "Add"))
 
