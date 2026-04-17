@@ -101,20 +101,11 @@ MySQL via `database/sql` + `github.com/go-sql-driver/mysql`. Tables auto-created
 
 ## Building
 
-Plugin must be compiled against the exact same Go version and proxy source as the running proxy binary. Use the build script from the parent directory:
+**Do not build the plugin on the host.** Go plugins are linked against the exact Go toolchain, libc, and proxy binary they will run with; a `.so` produced outside the proxy container will fail to load (symbol/ABI mismatch) even if `go build` succeeds.
 
-```bash
-cd /home/docker/compose/pelican/development/mt-multiserver
-./build-plugins.sh mt-multiserver-proxy-classrooms
-```
+**How it actually builds**: the proxy container compiles plugins itself on startup from the sources in the mounted `plugins/` folder. To pick up changes, just commit/update the sources in `plugins/mt-multiserver-proxy-classrooms/` and restart the proxy container — it will rebuild the `.so` in-place.
 
-Or manually:
-```bash
-go mod edit -replace=github.com/HimbeerserverDE/mt-multiserver-proxy=../../source
-go mod tidy
-go build -buildmode=plugin -o mt-multiserver-proxy-classrooms.so .
-go mod edit -dropreplace=github.com/HimbeerserverDE/mt-multiserver-proxy
-```
+The host-side `build-plugins.sh` and `go build -buildmode=plugin` commands are only useful as a compile check (catch syntax/type errors quickly); the resulting `.so` must not be deployed to the container.
 
 ## Proxy API Patterns Used
 
