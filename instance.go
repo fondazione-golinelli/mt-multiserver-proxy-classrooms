@@ -55,9 +55,15 @@ func (c *controller) provisionInstance(classID *int, createdBy, templateName str
 		return inst, err
 	}
 
-	// 3. Attach mount
-	if err := c.attachMount(ctx, tpl.MountID, appSrv.ID); err != nil {
-		return inst, err
+	// 3. Attach mounts
+	mountIDs := tpl.MountIDs
+	if len(mountIDs) == 0 && tpl.MountID != 0 {
+		mountIDs = []int{tpl.MountID}
+	}
+	for _, mid := range mountIDs {
+		if err := c.attachMount(ctx, mid, appSrv.ID); err != nil {
+			return inst, err
+		}
 	}
 
 	// 4. Reinstall to apply mount
@@ -121,13 +127,29 @@ func (c *controller) startInstance(inst *instanceData) error {
 	return c.updateInstanceStatus(inst.ID, "running")
 }
 
+// evacuateToLobby hops all players on the given server back to the lobby.
+func (c *controller) evacuateToLobby(serverName string) {
+	for cc := range proxy.Clts() {
+		if cc.ServerName() == serverName {
+			if err := cc.Hop(c.cfg.LobbyServer); err != nil {
+				log.Printf("[%s] failed to hop %s to lobby: %v", pluginName, cc.Name(), err)
+			}
+		}
+	}
+}
+
 // stopInstance stops a running server via Wings and unregisters it from the proxy.
 func (c *controller) stopInstance(inst *instanceData) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.cfg.PollTimeoutSeconds)*time.Second)
 	defer cancel()
 
-	// Unregister from proxy first so new players don't try to join
-	proxy.RmServer(inst.ProxyName)
+	// Move all players on this instance back to the lobby
+	c.evacuateToLobby(inst.ProxyName)
+
+	// Unregister from proxy now that no players are on it
+	if !proxy.RmServer(inst.ProxyName) {
+		log.Printf("[%s] warning: could not remove server %s from proxy", pluginName, inst.ProxyName)
+	}
 
 	node, err := c.nodeEndpointFor(ctx, inst.NodeID)
 	if err != nil {
@@ -152,7 +174,8 @@ func (c *controller) deleteInstance(inst *instanceData) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.cfg.PollTimeoutSeconds)*time.Second)
 	defer cancel()
 
-	// 1. Stop if running
+	// 1. Evacuate players and stop if running
+	c.evacuateToLobby(inst.ProxyName)
 	if inst.Status == "running" {
 		_ = c.stopInstance(inst)
 	} else {

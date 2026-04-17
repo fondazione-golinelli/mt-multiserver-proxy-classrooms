@@ -472,6 +472,102 @@ func (c *controller) watchTeacher(classID int, teacherName string) {
 	}
 }
 
+func (c *controller) gatherClass(classID int, teacherName string) {
+	tcc := proxy.Find(teacherName)
+	if tcc == nil {
+		return
+	}
+	tServer := tcc.ServerName()
+
+	students := c.getOnlineStudents(classID)
+	onlineStudents := make([]string, 0)
+	needsHop := false
+
+	for _, s := range students {
+		if s == teacherName {
+			continue
+		}
+		scc := proxy.Find(s)
+		if scc == nil {
+			continue
+		}
+		onlineStudents = append(onlineStudents, s)
+
+		if scc.ServerName() != tServer {
+			scc.Hop(tServer)
+			needsHop = true
+		}
+	}
+
+	if len(onlineStudents) > 0 {
+		// If any students needed to hop, delay the gather command
+		// to give them time to arrive on the teacher's server.
+		if needsHop {
+			go func() {
+				time.Sleep(3 * time.Second)
+				c.sendToPlayerServer(teacherName, map[string]interface{}{
+					"action":  "gather",
+					"players": onlineStudents,
+					"target":  teacherName,
+				})
+			}()
+		} else {
+			c.sendToPlayerServer(teacherName, map[string]interface{}{
+				"action":  "gather",
+				"players": onlineStudents,
+				"target":  teacherName,
+			})
+		}
+	}
+}
+
+// teleportToPlayer hops the teacher to the student's server (if needed)
+// and sends a tp_to command to that server.
+func (c *controller) teleportToPlayer(cc *proxy.ClientConn, target string) {
+	scc := proxy.Find(target)
+	if scc == nil {
+		cc.SendChatMsg("[Classrooms] " + target + " is not online.")
+		return
+	}
+
+	teacherServer := cc.ServerName()
+	studentServer := scc.ServerName()
+
+	// Hop teacher to student's server if they're on different servers
+	if teacherServer != studentServer {
+		cc.Hop(studentServer)
+		// Give hop time to complete before sending tp command
+		go func() {
+			time.Sleep(2 * time.Second)
+			c.sendToPlayerServer(target, map[string]string{
+				"action": "tp_to",
+				"player": cc.Name(),
+				"target": target,
+			})
+		}()
+		return
+	}
+
+	c.sendToPlayerServer(target, map[string]string{
+		"action": "tp_to",
+		"player": cc.Name(),
+		"target": target,
+	})
+}
+
+// watchSingleStudent forces a single student to look at the teacher.
+func (c *controller) watchSingleStudent(teacherName, studentName string) {
+	c.mu.Lock()
+	c.runtime.watchingPlayers[studentName] = teacherName
+	c.mu.Unlock()
+
+	c.sendToPlayerServer(studentName, map[string]interface{}{
+		"action":  "watch",
+		"player":  studentName,
+		"teacher": teacherName,
+	})
+}
+
 func (c *controller) stopWatching(classID int) {
 	for _, name := range c.getOnlineStudents(classID) {
 		c.mu.Lock()

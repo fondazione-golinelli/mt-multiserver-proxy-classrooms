@@ -70,23 +70,33 @@ func (c *controller) onChatMsg(cc *proxy.ClientConn, msg string) string {
 
 	// 2. Slash command interceptors
 	if msg == "/classes" {
-		c.handleClassesCmd(cc)
+		if res := c.handleClassesCmd(cc); res != "" {
+			cc.SendChatMsg(res)
+		}
 		return ""
 	}
 	if msg == "/admin" {
-		c.handleAdminCmd(cc)
+		if res := c.handleAdminCmd(cc); res != "" {
+			cc.SendChatMsg(res)
+		}
 		return ""
 	}
 	if msg == "/lobby" {
-		c.handleLobbyCmd(cc)
+		if res := c.handleLobbyCmd(cc); res != "" {
+			cc.SendChatMsg(res)
+		}
 		return ""
 	}
 	if strings.HasPrefix(msg, "/freeze ") {
-		c.handleFreezeCmd(cc, strings.Split(msg, " ")[1:]...)
+		if res := c.handleFreezeCmd(cc, strings.Split(msg, " ")[1:]...); res != "" {
+			cc.SendChatMsg(res)
+		}
 		return ""
 	}
 	if strings.HasPrefix(msg, "/unfreeze ") {
-		c.handleUnfreezeCmd(cc, strings.Split(msg, " ")[1:]...)
+		if res := c.handleUnfreezeCmd(cc, strings.Split(msg, " ")[1:]...); res != "" {
+			cc.SendChatMsg(res)
+		}
 		return ""
 	}
 

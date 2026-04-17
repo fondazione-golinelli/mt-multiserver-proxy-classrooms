@@ -65,8 +65,10 @@ type templateConfig struct {
 	UserID                int            `json:"user_id"`
 	EggID                 int            `json:"egg_id"`
 	MountID               int            `json:"mount_id"`
+	MountIDs              []int          `json:"mount_ids"`
 	TemplateName          string         `json:"template_name"`
 	InstanceTemplateMount string         `json:"instance_template_mount"`
+	ModPath               string         `json:"mod_path"`
 	WorldName             string         `json:"world_name"`
 	AdminName             string         `json:"admin_name"`
 	NamePrefix            string         `json:"name_prefix"`

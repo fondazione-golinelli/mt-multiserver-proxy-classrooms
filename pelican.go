@@ -131,6 +131,7 @@ func (c *controller) createServer(ctx context.Context, playerName string, tpl te
 			"SERVER_DOMAIN":           tpl.ServerDomain,
 			"DEFAULT_GAME":            c.cfg.DefaultGame,
 			"MINETEST_GAME_PATH":      "/home/container/.luanti/games",
+			"MINETEST_MOD_PATH":       tpl.ModPath,
 			"SERVER_MAX_USERS":        tpl.ServerMaxUsers,
 			"SERVER_MOTD":             tpl.ServerMOTD,
 			"SERVER_ADMIN_NAME":       adminName,
@@ -145,8 +146,8 @@ func (c *controller) createServer(ctx context.Context, playerName string, tpl te
 		Limits:        tpl.Limits,
 		FeatureLimits: tpl.FeatureLimits,
 		Deploy: deployConfig{
-			Locations:   tpl.LocationIDs,
-			Tags:        tpl.Tags,
+			Locations:   nonNilInts(tpl.LocationIDs),
+			Tags:        nonNilStrings(tpl.Tags),
 			DedicatedIP: false,
 			PortRange:   []int{},
 		},
@@ -365,6 +366,20 @@ func (c *controller) doJSONRequest(ctx context.Context, url, token, method strin
 }
 
 // ── Name helpers ───────────────────────────────────────────────────────────
+
+func nonNilStrings(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}
+
+func nonNilInts(s []int) []int {
+	if s == nil {
+		return []int{}
+	}
+	return s
+}
 
 func sanitizeName(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))

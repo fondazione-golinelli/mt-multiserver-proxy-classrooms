@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"strconv"
 	"strings"
 
@@ -75,8 +75,10 @@ func (c *controller) handleMainDashboard(cc *proxy.ClientConn, fields []mt.Field
 // ── Class View Handler ──────────────────────────────────────────────────────
 
 func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
+	log.Printf("[%s] handleClassView: user=%s, fields=%v", pluginName, cc.Name(), fields)
 	classID, ok := c.getActiveClass(cc.Name())
 	if !ok {
+		log.Printf("[%s] handleClassView: no active class for %s", pluginName, cc.Name())
 		c.showMainDashboard(cc)
 		return
 	}
@@ -118,6 +120,12 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 		return
 	}
 
+	if _, ok := fm["btn_gather_all"]; ok {
+		c.gatherClass(classID, cc.Name())
+		c.showClassView(cc, classID)
+		return
+	}
+
 	for k := range fm {
 		if strings.HasPrefix(k, "open_inst_") {
 			instID := strings.TrimPrefix(k, "open_inst_")
@@ -126,13 +134,13 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 		}
 		if strings.HasPrefix(k, "tp_to_") {
 			target := strings.TrimPrefix(k, "tp_to_")
-			cc.SendModChanMsg(modChannel, fmt.Sprintf(`{"action":"tp_to","player":"%s","target":"%s"}`, cc.Name(), target))
+			c.teleportToPlayer(cc, target)
 			c.showClassView(cc, classID)
 			return
 		}
 		if strings.HasPrefix(k, "watch_") {
 			target := strings.TrimPrefix(k, "watch_")
-			cc.SendModChanMsg(modChannel, fmt.Sprintf(`{"action":"watch","player":"%s","teacher":"%s"}`, target, cc.Name()))
+			c.watchSingleStudent(cc.Name(), target)
 			c.showClassView(cc, classID)
 			return
 		}
