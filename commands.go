@@ -92,6 +92,9 @@ func (c *controller) handleLobbyCmd(cc *proxy.ClientConn, args ...string) string
 	if c.cfg.LobbyServer == "" {
 		return "Lobby not configured."
 	}
+	if cc.ServerName() == c.cfg.LobbyServer {
+		return "You are already in the lobby."
+	}
 	if err := cc.Hop(c.cfg.LobbyServer); err != nil {
 		return "Failed to hop to lobby: " + err.Error()
 	}

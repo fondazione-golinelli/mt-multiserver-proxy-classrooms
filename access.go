@@ -54,6 +54,10 @@ func (c *controller) onChatMsg(cc *proxy.ClientConn, msg string) string {
 		parts := strings.Split(msg, " ")
 		if len(parts) >= 2 {
 			serverName := parts[1]
+			if cc.ServerName() == serverName {
+				cc.SendChatMsg("[Classrooms] You are already on that server.")
+				return ""
+			}
 			if !c.isAllowedToHop(cc.Name(), serverName) {
 				cc.SendChatMsg("[Classrooms] You are not permitted to join this instance.")
 				return ""

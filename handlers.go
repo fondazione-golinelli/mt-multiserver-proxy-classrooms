@@ -45,12 +45,12 @@ func (c *controller) hopClassToInstance(cc *proxy.ClientConn, inst *instanceData
 	if inst == nil || inst.ClassID == nil {
 		return
 	}
-	if includeTeacher {
+	if includeTeacher && cc.ServerName() != inst.ProxyName {
 		_ = cc.Hop(inst.ProxyName)
 	}
 	students := c.getOnlineStudents(*inst.ClassID)
 	for _, s := range students {
-		if scc := proxy.Find(s); scc != nil {
+		if scc := proxy.Find(s); scc != nil && scc.ServerName() != inst.ProxyName {
 			_ = scc.Hop(inst.ProxyName)
 		}
 	}
@@ -248,7 +248,9 @@ func (c *controller) handleInstanceReady(cc *proxy.ClientConn, fields []mt.Field
 
 	fm := fieldMap(fields)
 	if _, ok := fm["btn_ready_hop_me"]; ok {
-		_ = cc.Hop(inst.ProxyName)
+		if cc.ServerName() != inst.ProxyName {
+			_ = cc.Hop(inst.ProxyName)
+		}
 		return
 	}
 	if _, ok := fm["btn_ready_hop_class"]; ok {
@@ -350,12 +352,14 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 	}
 
 	if _, ok := fm["btn_hop_me"]; ok && inst != nil {
-		cc.Hop(inst.ProxyName)
+		if cc.ServerName() != inst.ProxyName {
+			cc.Hop(inst.ProxyName)
+		}
 		return
 	}
 
 	if _, ok := fm["btn_hop_class"]; ok && inst != nil && inst.ClassID != nil {
-		c.hopClassToInstance(cc, inst, false)
+		c.hopClassToInstance(cc, inst, true)
 		return
 	}
 
