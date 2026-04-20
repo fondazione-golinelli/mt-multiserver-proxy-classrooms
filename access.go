@@ -99,6 +99,24 @@ func (c *controller) onChatMsg(cc *proxy.ClientConn, msg string) string {
 		}
 		return ""
 	}
+	if strings.HasPrefix(msg, "/teacher_add ") {
+		if res := c.handleTeacherAddCmd(cc, strings.Split(msg, " ")[1:]...); res != "" {
+			cc.SendChatMsg(res)
+		}
+		return ""
+	}
+	if strings.HasPrefix(msg, "/teacher_remove ") {
+		if res := c.handleTeacherRemoveCmd(cc, strings.Split(msg, " ")[1:]...); res != "" {
+			cc.SendChatMsg(res)
+		}
+		return ""
+	}
+	if msg == "/teacher_list" {
+		if res := c.handleTeacherListCmd(cc); res != "" {
+			cc.SendChatMsg(res)
+		}
+		return ""
+	}
 
 	return msg
 }
