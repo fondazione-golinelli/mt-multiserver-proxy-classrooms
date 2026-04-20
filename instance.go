@@ -38,7 +38,7 @@ func (c *controller) provisionInstance(classID *int, createdBy, templateName str
 		UUID:         appSrv.UUID,
 		NodeID:       appSrv.Node,
 		ProxyName:    makeProxyName(tpl.NamePrefix, createdBy),
-		BackendAddr:  fmt.Sprintf("%s:%d", appSrv.UUID, tpl.InternalPort),
+		BackendAddr:  fmt.Sprintf("%s:%d", appSrv.UUID, c.cfg.Instance.InternalPort),
 		Status:       "provisioning",
 	}
 
@@ -56,9 +56,9 @@ func (c *controller) provisionInstance(classID *int, createdBy, templateName str
 	}
 
 	// 3. Attach mounts
-	mountIDs := tpl.MountIDs
-	if len(mountIDs) == 0 && tpl.MountID != 0 {
-		mountIDs = []int{tpl.MountID}
+	mountIDs := c.cfg.Instance.MountIDs
+	if len(mountIDs) == 0 && c.cfg.Instance.MountID != 0 {
+		mountIDs = []int{c.cfg.Instance.MountID}
 	}
 	for _, mid := range mountIDs {
 		if err := c.attachMount(ctx, mid, appSrv.ID); err != nil {
@@ -114,11 +114,10 @@ func (c *controller) startInstance(inst *instanceData) error {
 	}
 
 	// Register with proxy
-	tpl := c.cfg.Templates[inst.TemplateName]
 	if ok := proxy.AddServer(inst.ProxyName, proxy.Server{
 		Addr:      inst.BackendAddr,
-		MediaPool: tpl.MediaPool,
-		Groups:    tpl.Groups,
+		MediaPool: c.cfg.Instance.MediaPool,
+		Groups:    c.cfg.Instance.Groups,
 		Fallback:  c.cfg.LobbyServer,
 	}); !ok {
 		return fmt.Errorf("proxy refused to register server %s", inst.ProxyName)
@@ -208,7 +207,7 @@ func (c *controller) reconcileInstances() {
 			continue
 		}
 
-		tpl, ok := c.cfg.Templates[inst.TemplateName]
+		_, ok := c.cfg.Templates[inst.TemplateName]
 		if !ok {
 			log.Printf("[%s] reconciliation: template %q for instance %s no longer exists", pluginName, inst.TemplateName, inst.ID)
 			continue
@@ -217,8 +216,8 @@ func (c *controller) reconcileInstances() {
 		// Re-register with proxy
 		if ok := proxy.AddServer(inst.ProxyName, proxy.Server{
 			Addr:      inst.BackendAddr,
-			MediaPool: tpl.MediaPool,
-			Groups:    tpl.Groups,
+			MediaPool: c.cfg.Instance.MediaPool,
+			Groups:    c.cfg.Instance.Groups,
 			Fallback:  c.cfg.LobbyServer,
 		}); ok {
 			count++

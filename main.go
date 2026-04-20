@@ -58,37 +58,42 @@ type classroomsConfig struct {
 	DBPasswordFile string `json:"db_password_file"`
 
 	// Templates
+	Instance  instanceConfig            `json:"instance"`
 	Templates map[string]templateConfig `json:"templates"`
 }
 
-type templateConfig struct {
+type instanceConfig struct {
 	UserID                int            `json:"user_id"`
 	EggID                 int            `json:"egg_id"`
 	MountID               int            `json:"mount_id"`
 	MountIDs              []int          `json:"mount_ids"`
-	TemplateName          string         `json:"template_name"`
 	InstanceTemplateMount string         `json:"instance_template_mount"`
 	ModPath               string         `json:"mod_path"`
-	WorldName             string         `json:"world_name"`
-	AdminName             string         `json:"admin_name"`
-	NamePrefix            string         `json:"name_prefix"`
-	ServerDescription     string         `json:"server_description"`
-	ServerDomain          string         `json:"server_domain"`
-	ServerURL             string         `json:"server_url"`
-	ServerAnnounce        bool           `json:"server_announce"`
-	ServerListURL         string         `json:"server_list_url"`
-	ServerMaxUsers        string         `json:"server_max_users"`
-	ServerMOTD            string         `json:"server_motd"`
-	ServerPassword        string         `json:"server_password"`
-	LocationIDs           []int          `json:"location_ids"`
-	Tags                  []string       `json:"tags"`
-	DockerImage           string         `json:"docker_image"`
-	Startup               string         `json:"startup"`
+	GamePath              string         `json:"game_path"`
 	InternalPort          int            `json:"internal_port"`
 	MediaPool             string         `json:"media_pool"`
+	LocationIDs           []int          `json:"location_ids"`
 	Groups                []string       `json:"groups"`
 	Limits                resourceLimits `json:"limits"`
 	FeatureLimits         featureLimits  `json:"feature_limits"`
+	DockerImage           string         `json:"docker_image"`
+	Startup               string         `json:"startup"`
+}
+
+type templateConfig struct {
+	TemplateName      string   `json:"template_name"`
+	WorldName         string   `json:"world_name"`
+	AdminName         string   `json:"admin_name"`
+	NamePrefix        string   `json:"name_prefix"`
+	ServerDescription string   `json:"server_description"`
+	ServerDomain      string   `json:"server_domain"`
+	ServerURL         string   `json:"server_url"`
+	ServerAnnounce    bool     `json:"server_announce"`
+	ServerListURL     string   `json:"server_list_url"`
+	ServerMaxUsers    string   `json:"server_max_users"`
+	ServerMOTD        string   `json:"server_motd"`
+	ServerPassword    string   `json:"server_password"`
+	Tags              []string `json:"tags"`
 
 	// Visibility
 	Public bool `json:"public"`
@@ -297,6 +302,10 @@ func loadConfig() (classroomsConfig, error) {
 		cfg.JoinRetryDelayMillis = defaultJoinRetryDelayMS
 	}
 
+	if err := validateInstanceConfig(&cfg.Instance); err != nil {
+		return classroomsConfig{}, err
+	}
+
 	// Templates
 	if len(cfg.Templates) == 0 {
 		return classroomsConfig{}, errors.New("at least one template must be configured")
@@ -312,36 +321,49 @@ func loadConfig() (classroomsConfig, error) {
 	return cfg, nil
 }
 
+func validateInstanceConfig(inst *instanceConfig) error {
+	if inst.UserID <= 0 {
+		return errors.New("instance.user_id must be > 0")
+	}
+	if inst.EggID <= 0 {
+		return errors.New("instance.egg_id must be > 0")
+	}
+	if inst.MountID <= 0 && len(inst.MountIDs) == 0 {
+		return errors.New("instance.mount_id or instance.mount_ids is required")
+	}
+	if inst.InstanceTemplateMount == "" {
+		inst.InstanceTemplateMount = "/home/mount"
+	}
+	if inst.ModPath == "" {
+		return errors.New("instance.mod_path is required")
+	}
+	if inst.GamePath == "" {
+		return errors.New("instance.game_path is required")
+	}
+	if inst.InternalPort <= 0 {
+		inst.InternalPort = defaultInternalPort
+	}
+	if inst.MediaPool == "" {
+		return errors.New("instance.media_pool is required")
+	}
+	if len(inst.LocationIDs) == 0 {
+		return errors.New("instance.location_ids must not be empty")
+	}
+	if inst.Limits.IO == 0 {
+		inst.Limits.IO = 500
+	}
+	return nil
+}
+
 func validateTemplate(name string, tpl *templateConfig) error {
-	if tpl.UserID <= 0 {
-		return fmt.Errorf("template %q: user_id must be > 0", name)
-	}
-	if tpl.EggID <= 0 {
-		return fmt.Errorf("template %q: egg_id must be > 0", name)
-	}
-	if tpl.MountID <= 0 {
-		return fmt.Errorf("template %q: mount_id must be > 0", name)
-	}
 	if tpl.TemplateName == "" {
 		return fmt.Errorf("template %q: template_name is required", name)
-	}
-	if tpl.InstanceTemplateMount == "" {
-		tpl.InstanceTemplateMount = "/home/mount"
 	}
 	if tpl.WorldName == "" {
 		tpl.WorldName = "world"
 	}
-	if len(tpl.LocationIDs) == 0 {
-		return fmt.Errorf("template %q: location_ids must not be empty", name)
-	}
 	if tpl.NamePrefix == "" {
 		tpl.NamePrefix = name
-	}
-	if tpl.InternalPort <= 0 {
-		tpl.InternalPort = defaultInternalPort
-	}
-	if tpl.MediaPool == "" {
-		return fmt.Errorf("template %q: media_pool is required", name)
 	}
 	if tpl.ServerDescription == "" {
 		tpl.ServerDescription = "Dynamic classroom instance"
@@ -357,9 +379,6 @@ func validateTemplate(name string, tpl *templateConfig) error {
 	}
 	if tpl.ServerMaxUsers == "" {
 		tpl.ServerMaxUsers = "15"
-	}
-	if tpl.Limits.IO == 0 {
-		tpl.Limits.IO = 500
 	}
 	return nil
 }
