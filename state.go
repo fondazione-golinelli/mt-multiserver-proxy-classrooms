@@ -319,13 +319,41 @@ func (c *controller) getOnlineStudents(classID int) []string {
 	return online
 }
 
+func (c *controller) getStudentClass(studentName string) (*classData, error) {
+	var cd classData
+	err := c.db.QueryRow(`
+		SELECT c.id, c.name, c.created_by, c.created_at
+		FROM class_students cs
+		JOIN classes c ON c.id = cs.class_id
+		WHERE cs.username = ?`, studentName,
+	).Scan(&cd.ID, &cd.Name, &cd.CreatedBy, &cd.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &cd, nil
+}
+
 func (c *controller) addStudent(classID int, studentName string) (bool, string) {
 	if studentName == "" {
 		return false, "Student name is empty."
 	}
 
-	_, err := c.db.Exec(
-		"INSERT IGNORE INTO class_students (class_id, username) VALUES (?, ?)",
+	existing, err := c.getStudentClass(studentName)
+	if err != nil {
+		return false, "Database error."
+	}
+	if existing != nil {
+		if existing.ID == classID {
+			return false, studentName + " is already in this class."
+		}
+		return false, studentName + " is already assigned to class " + existing.Name + "."
+	}
+
+	_, err = c.db.Exec(
+		"INSERT INTO class_students (class_id, username) VALUES (?, ?)",
 		classID, studentName)
 	if err != nil {
 		return false, "Failed to add student."

@@ -53,6 +53,7 @@ func migrateDB(db *sql.DB) error {
 			class_id INT         NOT NULL,
 			username VARCHAR(50) NOT NULL,
 			PRIMARY KEY (class_id, username),
+			UNIQUE KEY uniq_class_students_username (username),
 			FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
@@ -99,6 +100,10 @@ func migrateDB(db *sql.DB) error {
 		"ALTER TABLE instances ADD COLUMN display_name VARCHAR(100) NOT NULL DEFAULT '' AFTER institute"); err != nil {
 		return err
 	}
+	if err := addUniqueIndexIfMissing(db, "class_students", "uniq_class_students_username",
+		"ALTER TABLE class_students ADD UNIQUE KEY uniq_class_students_username (username)"); err != nil {
+		return err
+	}
 
 	log.Printf("[%s] database migration complete", pluginName)
 	return nil
@@ -120,6 +125,26 @@ func addColumnIfMissing(db *sql.DB, tableName, columnName, stmt string) error {
 	}
 	if _, err := db.Exec(stmt); err != nil {
 		return fmt.Errorf("migrate column %s.%s: %w", tableName, columnName, err)
+	}
+	return nil
+}
+
+func addUniqueIndexIfMissing(db *sql.DB, tableName, indexName, stmt string) error {
+	var exists int
+	err := db.QueryRow(`
+		SELECT COUNT(*)
+		FROM information_schema.STATISTICS
+		WHERE TABLE_SCHEMA = DATABASE()
+			AND TABLE_NAME = ?
+			AND INDEX_NAME = ?`, tableName, indexName).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("check index %s.%s: %w", tableName, indexName, err)
+	}
+	if exists > 0 {
+		return nil
+	}
+	if _, err := db.Exec(stmt); err != nil {
+		return fmt.Errorf("migrate index %s.%s: %w", tableName, indexName, err)
 	}
 	return nil
 }
