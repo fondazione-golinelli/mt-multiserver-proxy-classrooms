@@ -34,7 +34,7 @@ func (c *controller) registerJoinLeave() {
 		name := cc.Name()
 		c.clearActiveClass(name)
 		c.clearActiveInstance(name)
-		
+
 		c.mu.Lock()
 		delete(c.runtime.watchingPlayers, name)
 		// If a teacher leaves, stop watching for all their students

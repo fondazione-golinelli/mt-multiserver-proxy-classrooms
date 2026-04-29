@@ -117,20 +117,30 @@ type featureLimits struct {
 // ── Runtime State (not persisted) ───────────────────────────────────────────
 
 type runtimeState struct {
-	frozenPlayers   map[string]bool     // player -> frozen
-	watchingPlayers map[string]string   // student -> teacher
-	activeClass     map[string]int      // player -> class ID they have open
-	activeInstance  map[string]string   // player -> instance ID they have open
-	pendingOps      map[string]struct{} // player -> in-flight operation
+	frozenPlayers        map[string]bool     // player -> frozen
+	watchingPlayers      map[string]string   // student -> teacher
+	activeClass          map[string]int      // player -> class ID they have open
+	activeClassOrigin    map[string]string   // player -> teacher/admin origin
+	activeInstance       map[string]string   // player -> instance ID they have open
+	activeInstanceOrigin map[string]string   // player -> teacher/admin origin
+	adminTab             map[string]string   // player -> current admin tab
+	adminInstituteFilter map[string]string   // player -> current admin institute filter
+	adminTeacherFilter   map[string]string   // player -> current admin teacher filter
+	pendingOps           map[string]struct{} // player -> in-flight operation
 }
 
 func newRuntimeState() runtimeState {
 	return runtimeState{
-		frozenPlayers:   make(map[string]bool),
-		watchingPlayers: make(map[string]string),
-		activeClass:     make(map[string]int),
-		activeInstance:  make(map[string]string),
-		pendingOps:      make(map[string]struct{}),
+		frozenPlayers:        make(map[string]bool),
+		watchingPlayers:      make(map[string]string),
+		activeClass:          make(map[string]int),
+		activeClassOrigin:    make(map[string]string),
+		activeInstance:       make(map[string]string),
+		activeInstanceOrigin: make(map[string]string),
+		adminTab:             make(map[string]string),
+		adminInstituteFilter: make(map[string]string),
+		adminTeacherFilter:   make(map[string]string),
+		pendingOps:           make(map[string]struct{}),
 	}
 }
 

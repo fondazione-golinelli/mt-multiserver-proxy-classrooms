@@ -37,6 +37,7 @@ func migrateDB(db *sql.DB) error {
 	migrations := []string{
 		`CREATE TABLE IF NOT EXISTS teachers (
 			username   VARCHAR(50) PRIMARY KEY,
+			institute  VARCHAR(100) NOT NULL DEFAULT '',
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
@@ -59,6 +60,8 @@ func migrateDB(db *sql.DB) error {
 			id            VARCHAR(100) PRIMARY KEY,
 			class_id      INT,
 			created_by    VARCHAR(50)  NOT NULL,
+			institute     VARCHAR(100) NOT NULL DEFAULT '',
+			display_name  VARCHAR(100) NOT NULL DEFAULT '',
 			template_name VARCHAR(100) NOT NULL,
 			created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			server_id     INT          NOT NULL,
@@ -84,6 +87,39 @@ func migrateDB(db *sql.DB) error {
 		}
 	}
 
+	if err := addColumnIfMissing(db, "teachers", "institute",
+		"ALTER TABLE teachers ADD COLUMN institute VARCHAR(100) NOT NULL DEFAULT '' AFTER username"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(db, "instances", "institute",
+		"ALTER TABLE instances ADD COLUMN institute VARCHAR(100) NOT NULL DEFAULT '' AFTER created_by"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(db, "instances", "display_name",
+		"ALTER TABLE instances ADD COLUMN display_name VARCHAR(100) NOT NULL DEFAULT '' AFTER institute"); err != nil {
+		return err
+	}
+
 	log.Printf("[%s] database migration complete", pluginName)
+	return nil
+}
+
+func addColumnIfMissing(db *sql.DB, tableName, columnName, stmt string) error {
+	var exists int
+	err := db.QueryRow(`
+		SELECT COUNT(*)
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE()
+			AND TABLE_NAME = ?
+			AND COLUMN_NAME = ?`, tableName, columnName).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("check column %s.%s: %w", tableName, columnName, err)
+	}
+	if exists > 0 {
+		return nil
+	}
+	if _, err := db.Exec(stmt); err != nil {
+		return fmt.Errorf("migrate column %s.%s: %w", tableName, columnName, err)
+	}
 	return nil
 }

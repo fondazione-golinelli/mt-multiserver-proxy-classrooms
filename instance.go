@@ -13,7 +13,7 @@ import (
 // ── Instance Lifecycle ──────────────────────────────────────────────────────
 
 // provisionInstance creates a new Pelican server from a template and registers it with the proxy.
-func (c *controller) provisionInstance(classID *int, createdBy, templateName string) (*instanceData, error) {
+func (c *controller) provisionInstance(classID *int, createdBy, templateName, displayName string) (*instanceData, error) {
 	tpl, ok := c.cfg.Templates[templateName]
 	if !ok {
 		return nil, fmt.Errorf("template %q not found", templateName)
@@ -28,10 +28,17 @@ func (c *controller) provisionInstance(classID *int, createdBy, templateName str
 		return nil, err
 	}
 
+	institute, err := c.getTeacherInstitute(createdBy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load creator institute: %w", err)
+	}
+
 	inst := &instanceData{
 		ID:           appSrv.ExternalID,
 		ClassID:      classID,
 		CreatedBy:    createdBy,
+		Institute:    institute,
+		DisplayName:  displayName,
 		TemplateName: templateName,
 		CreatedAt:    time.Now(),
 		ServerID:     appSrv.ID,

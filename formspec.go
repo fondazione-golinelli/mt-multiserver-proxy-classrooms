@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	proxy "github.com/HimbeerserverDE/mt-multiserver-proxy"
@@ -57,31 +56,35 @@ func (c *controller) showMainDashboard(cc *proxy.ClientConn) {
 
 	var b strings.Builder
 	b.WriteString("formspec_version[6]")
-	b.WriteString("size[12,10]")
+	b.WriteString("size[12,8.6]")
 	b.WriteString(fmt.Sprintf("bgcolor[%s;true]", headerColor))
 
 	// Header
-	b.WriteString(box(0, 0, 12, 1.1, panel))
-	b.WriteString(coloredLbl(0.3, 0.5, accent, "| "))
-	b.WriteString(coloredLbl(0.7, 0.5, light, "Classrooms - Teacher Dashboard"))
-	b.WriteString(box(0, 1.1, 12, 0.05, accent))
+	b.WriteString(box(0, 0, 12, 0.85, panel))
+	b.WriteString(coloredLbl(0.35, 0.38, accent, "| "))
+	b.WriteString(coloredLbl(0.75, 0.38, light, "Classrooms - Teacher Dashboard"))
+	if c.isAdmin(name) {
+		b.WriteString(btn(8.85, 0.15, 1.45, 0.52, "btn_admin_panel", "Admin"))
+	}
+	b.WriteString(btnExit(10.45, 0.15, 1.25, 0.52, "btn_close", "Close"))
+	b.WriteString(box(0, 0.85, 12, 0.04, accent))
 
 	// Create class section
-	b.WriteString(box(0.3, 1.4, 11.4, 1.5, panel))
-	b.WriteString(coloredLbl(0.6, 1.8, muted, "New class name:"))
-	b.WriteString("field[3.5,1.7;5.5,0.8;new_class_name;;]")
+	b.WriteString(box(0.3, 1.15, 11.4, 0.75, panel))
+	b.WriteString(coloredLbl(0.55, 1.48, muted, "New class"))
+	b.WriteString("field[1.9,1.28;6.8,0.5;new_class_name;;]")
 	b.WriteString("field_close_on_enter[new_class_name;false]")
-	b.WriteString(btn(9.2, 1.7, 2.2, 0.8, "btn_create_class", "+ Create"))
+	b.WriteString(btn(9.0, 1.27, 1.3, 0.52, "btn_create_class", "+ Create"))
 
 	// List header
-	b.WriteString(coloredLbl(0.5, 3.5, muted, "YOUR CLASSES"))
-	b.WriteString(box(0, 3.8, 12, 0.04, panel))
+	b.WriteString(coloredLbl(0.35, 2.35, muted, "YOUR CLASSES"))
 
 	if len(classes) == 0 {
-		b.WriteString(coloredLbl(0.5, 4.5, muted, "No classes yet. Create one above to get started."))
+		b.WriteString(coloredLbl(0.5, 3.2, muted, "No classes yet. Create one above to get started."))
 	} else {
-		b.WriteString("scroll_container[0,4;12,5;scr_classes;vertical;0.1]")
-		y := 0.2
+		b.WriteString(scrollbarFor("scr_classes", 11.45, 2.75, 5.45, len(classes), 0.95, 0.05))
+		b.WriteString("scroll_container[0.2,2.75;11.15,5.45;scr_classes;vertical;0.1]")
+		y := 0.05
 		for _, cls := range classes {
 			students, _ := c.getStudents(cls.ID)
 			online := 0
@@ -91,21 +94,16 @@ func (c *controller) showMainDashboard(cc *proxy.ClientConn) {
 				}
 			}
 
-			b.WriteString(box(0.2, y, 11.6, 1.0, panel))
-			b.WriteString(fmt.Sprintf("label[0.5,%g;%s]", y+0.4,
+			b.WriteString(box(0, y, 11.0, 0.85, panel))
+			b.WriteString(fmt.Sprintf("label[0.25,%g;%s]", y+0.32,
 				fmtEsc(mcColorize(light, cls.Name)+
 					mcColorize(muted, fmt.Sprintf("  (%d/%d online)", online, len(students))))))
 
-			b.WriteString(fmt.Sprintf("button[8.0,%g;1.8,0.8;open_class_%d;Open]", y+0.1, cls.ID))
-			b.WriteString(fmt.Sprintf("button[10.0,%g;1.8,0.8;del_class_%d;%s]", y+0.1, cls.ID, fmtEsc(mcColorize(danger, "Delete"))))
-			y += 1.2
+			b.WriteString(fmt.Sprintf("button[8.2,%g;1.0,0.55;open_class_%d;Open]", y+0.14, cls.ID))
+			b.WriteString(fmt.Sprintf("button[9.35,%g;1.0,0.55;del_class_%d;%s]", y+0.14, cls.ID, fmtEsc(mcColorize(danger, "Del"))))
+			y += 0.95
 		}
 		b.WriteString("scroll_container_end[]")
-	}
-
-	b.WriteString(btnExit(0.3, 9.1, 2, 0.7, "btn_close", "Close"))
-	if c.isAdmin(name) {
-		b.WriteString(btn(9.7, 9.1, 2, 0.7, "btn_admin_panel", "Admin Panel"))
 	}
 
 	cc.ShowFormspec("classrooms:main", b.String())
@@ -114,41 +112,53 @@ func (c *controller) showMainDashboard(cc *proxy.ClientConn) {
 // ── Class View (Students + Instances) ───────────────────────────────────────
 
 func (c *controller) showClassView(cc *proxy.ClientConn, classID int) {
+	c.showClassViewWithOrigin(cc, classID, viewOriginTeacher)
+}
+
+func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, origin string) {
+	if origin == "" {
+		origin = viewOriginTeacher
+	}
 	cls, err := c.getClassByID(classID)
 	if err != nil || cls == nil {
-		c.showMainDashboard(cc)
+		c.showClassFallback(cc, origin)
 		return
 	}
-	c.setActiveClass(cc.Name(), classID)
+	c.setActiveClassWithOrigin(cc.Name(), classID, origin)
 
 	students, _ := c.getStudents(classID)
 	instances, _ := c.getInstancesForClass(classID)
 
 	var b strings.Builder
 	b.WriteString("formspec_version[6]")
-	b.WriteString("size[14,12]")
+	b.WriteString("size[14,8.6]")
 	b.WriteString(fmt.Sprintf("bgcolor[%s;true]", headerColor))
 
 	// Header
-	b.WriteString(box(0, 0, 14, 1.1, panel))
-	b.WriteString(btn(0.2, 0.2, 1.5, 0.7, "btn_back", "Back"))
-	b.WriteString(coloredLbl(2.0, 0.5, accent, "| "))
-	b.WriteString(coloredLbl(2.4, 0.5, light, "Class: "+cls.Name))
-	b.WriteString(box(0, 1.1, 14, 0.05, accent))
+	b.WriteString(box(0, 0, 14, 0.85, panel))
+	b.WriteString(btn(0.2, 0.15, 1.25, 0.52, "btn_back", "Back"))
+	b.WriteString(coloredLbl(1.75, 0.38, accent, "| "))
+	b.WriteString(coloredLbl(2.15, 0.38, light, "Class: "+cls.Name))
+	if origin == viewOriginAdminClasses {
+		b.WriteString(coloredLbl(8.0, 0.38, muted, "Owner: "+cls.CreatedBy))
+	}
+	b.WriteString(btnExit(12.45, 0.15, 1.25, 0.52, "btn_close", "Close"))
+	b.WriteString(box(0, 0.85, 14, 0.04, accent))
 
 	// Left Column: Student Controls (6 units wide)
-	b.WriteString(coloredLbl(0.5, 1.5, muted, "STUDENTS"))
-	b.WriteString(box(0.3, 1.8, 6.2, 9.2, panel))
+	b.WriteString(coloredLbl(0.35, 1.25, muted, "STUDENTS"))
+	b.WriteString(box(0.2, 1.55, 6.55, 6.75, panel))
 
-	b.WriteString(btn(0.5, 2.0, 2.8, 0.7, "btn_freeze_all", "Freeze All"))
-	b.WriteString(btn(3.5, 2.0, 2.8, 0.7, "btn_unfreeze_all", "Unfreeze All"))
-	b.WriteString(btn(0.5, 2.8, 2.8, 0.7, "btn_watch_teacher", "Watch Me"))
-	b.WriteString(btn(3.5, 2.8, 2.8, 0.7, "btn_stop_watching", "Stop Watch"))
-	b.WriteString(btn(0.5, 3.6, 2.8, 0.7, "btn_gather_all", "Gather All"))
-	b.WriteString(btn(3.5, 3.6, 2.8, 0.7, "btn_manage_students", "Edit Names"))
+	b.WriteString(btn(0.4, 1.75, 1.9, 0.5, "btn_freeze_all", "Freeze"))
+	b.WriteString(btn(2.45, 1.75, 1.9, 0.5, "btn_unfreeze_all", "Unfreeze"))
+	b.WriteString(btn(4.5, 1.75, 1.9, 0.5, "btn_gather_all", "Gather"))
+	b.WriteString(btn(0.4, 2.35, 1.9, 0.5, "btn_watch_teacher", "Watch"))
+	b.WriteString(btn(2.45, 2.35, 1.9, 0.5, "btn_stop_watching", "Stop Watch"))
+	b.WriteString(btn(4.5, 2.35, 1.9, 0.5, "btn_manage_students", "Edit Names"))
 
-	b.WriteString("scroll_container[0.5,4.5;6.0,6.0;scr_students;vertical;0.1]")
-	sy := 0.1
+	b.WriteString(scrollbarFor("scr_students", 6.3, 3.1, 4.95, len(students), 0.75, 0.05))
+	b.WriteString("scroll_container[0.4,3.1;5.8,4.95;scr_students;vertical;0.1]")
+	sy := 0.05
 	for _, s := range students {
 		online := proxy.Find(s) != nil
 		statusColor := muted
@@ -156,24 +166,25 @@ func (c *controller) showClassView(cc *proxy.ClientConn, classID int) {
 			statusColor = success
 		}
 
-		b.WriteString(box(0, sy, 5.5, 0.8, headerColor))
-		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", sy+0.35, fmtEsc(mcColorize(statusColor, s))))
+		b.WriteString(box(0, sy, 5.65, 0.65, headerColor))
+		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", sy+0.25, fmtEsc(mcColorize(statusColor, s))))
 
 		if online {
-			b.WriteString(fmt.Sprintf("button[3.2,%g;1.0,0.6;tp_to_%s;TP]", sy+0.1, fmtEsc(s)))
-			b.WriteString(fmt.Sprintf("button[4.3,%g;1.0,0.6;watch_%s;Eye]", sy+0.1, fmtEsc(s)))
+			b.WriteString(fmt.Sprintf("button[3.45,%g;0.8,0.45;tp_to_%s;TP]", sy+0.1, fmtEsc(s)))
+			b.WriteString(fmt.Sprintf("button[4.35,%g;0.8,0.45;watch_%s;Eye]", sy+0.1, fmtEsc(s)))
 		}
-		sy += 0.9
+		sy += 0.75
 	}
 	b.WriteString("scroll_container_end[]")
 
 	// Right Column: Instances (7 units wide)
-	b.WriteString(coloredLbl(7.0, 1.5, muted, "INSTANCES"))
-	b.WriteString(box(6.8, 1.8, 6.9, 9.2, panel))
-	b.WriteString(btn(7.0, 2.0, 6.5, 0.8, "btn_create_instance", "+ Provision New Instance"))
+	b.WriteString(coloredLbl(7.05, 1.25, muted, "INSTANCES"))
+	b.WriteString(box(6.95, 1.55, 6.85, 6.75, panel))
+	b.WriteString(btn(7.15, 1.75, 6.35, 0.55, "btn_create_instance", "+ Provision New Instance"))
 
-	b.WriteString("scroll_container[7.0,3.0;6.5,7.5;scr_instances;vertical;0.1]")
-	iy := 0.1
+	b.WriteString(scrollbarFor("scr_instances", 13.45, 2.55, 5.5, len(instances), 0.95, 0.05))
+	b.WriteString("scroll_container[7.15,2.55;6.2,5.5;scr_instances;vertical;0.1]")
+	iy := 0.05
 	for _, inst := range instances {
 		statusColor := muted
 		switch inst.Status {
@@ -185,17 +196,24 @@ func (c *controller) showClassView(cc *proxy.ClientConn, classID int) {
 			statusColor = danger
 		}
 
-		b.WriteString(box(0, iy, 6.2, 1.2, headerColor))
-		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", iy+0.35, fmtEsc(mcColorize(light, inst.TemplateName))))
-		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", iy+0.75, fmtEsc(mcColorize(statusColor, inst.Status))))
+		b.WriteString(box(0, iy, 6.05, 0.85, headerColor))
+		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", iy+0.28, fmtEsc(mcColorize(light, inst.Title()))))
+		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", iy+0.58, fmtEsc(mcColorize(muted, inst.TemplateName+" | ")+mcColorize(statusColor, inst.Status))))
 
-		b.WriteString(fmt.Sprintf("button[4.0,%g;2.0,0.8;open_inst_%s;Manage]", iy+0.2, fmtEsc(inst.ID)))
-		iy += 1.4
+		b.WriteString(fmt.Sprintf("button[4.75,%g;1.0,0.55;open_inst_%s;Open]", iy+0.14, fmtEsc(inst.ID)))
+		iy += 0.95
 	}
 	b.WriteString("scroll_container_end[]")
 
-	b.WriteString(btnExit(0.3, 11.2, 2, 0.7, "btn_close", "Close"))
 	cc.ShowFormspec("classrooms:class", b.String())
+}
+
+func (c *controller) showClassFallback(cc *proxy.ClientConn, origin string) {
+	if origin == viewOriginAdminClasses {
+		c.showAdminPanelTab(cc, "classes")
+		return
+	}
+	c.showMainDashboard(cc)
 }
 
 // ── Instance Creation (Template Picker) ─────────────────────────────────────
@@ -208,23 +226,29 @@ func (c *controller) showTemplatePicker(cc *proxy.ClientConn, classID *int) {
 
 	var b strings.Builder
 	b.WriteString("formspec_version[6]")
-	b.WriteString("size[10,8]")
+	b.WriteString("size[10,7.2]")
 	b.WriteString(fmt.Sprintf("bgcolor[%s;true]", headerColor))
 
-	b.WriteString(box(0, 0, 10, 1.1, panel))
-	b.WriteString(btn(0.2, 0.2, 1.5, 0.7, "btn_back", "Back"))
-	b.WriteString(coloredLbl(2.0, 0.5, light, "Select Template"))
-	b.WriteString(box(0, 1.1, 10, 0.05, accent))
+	b.WriteString(box(0, 0, 10, 0.9, panel))
+	b.WriteString(btn(0.2, 0.15, 1.3, 0.55, "btn_back", "Back"))
+	b.WriteString(coloredLbl(1.8, 0.42, light, "Create Instance"))
+	b.WriteString(box(0, 0.9, 10, 0.04, accent))
 
-	b.WriteString("scroll_container[0.5,1.5;9,6;scr_templates;vertical;0.1]")
-	y := 0.2
+	b.WriteString(box(0.4, 1.15, 9.2, 0.9, panel))
+	b.WriteString(coloredLbl(0.65, 1.53, muted, "Name"))
+	b.WriteString("field[1.7,1.4;7.4,0.55;new_instance_name;;]")
+	b.WriteString("field_close_on_enter[new_instance_name;false]")
+
+	b.WriteString(scrollbarFor("scr_templates", 9.25, 2.25, 4.55, len(templates), 1.0, 0.05))
+	b.WriteString("scroll_container[0.4,2.25;8.75,4.55;scr_templates;vertical;0.1]")
+	y := 0.05
 	for _, tName := range templates {
 		tpl := c.cfg.Templates[tName]
-		b.WriteString(box(0, y, 8.5, 1.2, panel))
-		b.WriteString(fmt.Sprintf("label[0.3,%g;%s]", y+0.4, fmtEsc(mcColorize(light, tName))))
-		b.WriteString(fmt.Sprintf("label[0.3,%g;%s]", y+0.8, fmtEsc(mcColorize(muted, tpl.ServerDescription))))
-		b.WriteString(fmt.Sprintf("button[6.5,%g;1.8,0.8;pick_tpl_%s;Select]", y+0.2, fmtEsc(tName)))
-		y += 1.4
+		b.WriteString(box(0, y, 8.55, 0.9, panel))
+		b.WriteString(fmt.Sprintf("label[0.25,%g;%s]", y+0.32, fmtEsc(mcColorize(light, tName))))
+		b.WriteString(fmt.Sprintf("label[0.25,%g;%s]", y+0.62, fmtEsc(mcColorize(muted, tpl.ServerDescription))))
+		b.WriteString(fmt.Sprintf("button[6.75,%g;1.4,0.55;pick_tpl_%s;Select]", y+0.17, fmtEsc(tName)))
+		y += 1.0
 	}
 	b.WriteString("scroll_container_end[]")
 
@@ -257,7 +281,14 @@ func (c *controller) showInstanceReady(cc *proxy.ClientConn, inst *instanceData,
 	if inst == nil {
 		return
 	}
-	c.setActiveInstance(cc.Name(), inst.ID)
+	origin := viewOriginAdminInstances
+	if inst.ClassID != nil {
+		origin = c.getActiveClassOrigin(cc.Name())
+		if origin == "" {
+			origin = viewOriginTeacher
+		}
+	}
+	c.setActiveInstanceWithOrigin(cc.Name(), inst.ID, origin)
 
 	var b strings.Builder
 	b.WriteString("formspec_version[6]")
@@ -270,7 +301,7 @@ func (c *controller) showInstanceReady(cc *proxy.ClientConn, inst *instanceData,
 	b.WriteString(box(0, 1.1, 10, 0.05, success))
 
 	b.WriteString(box(0.5, 1.6, 9, 2.3, panel))
-	b.WriteString(coloredLbl(0.9, 2.1, light, inst.ProxyName))
+	b.WriteString(coloredLbl(0.9, 2.1, light, inst.Title()))
 	b.WriteString(coloredLbl(0.9, 2.7, muted, "Template: "+inst.TemplateName))
 	b.WriteString(coloredLbl(0.9, 3.3, muted, "The server is running and available in the proxy."))
 
@@ -315,12 +346,19 @@ func (c *controller) showInstanceError(cc *proxy.ClientConn, inst *instanceData,
 // ── Instance Detail View ────────────────────────────────────────────────────
 
 func (c *controller) showInstanceView(cc *proxy.ClientConn, instanceID string) {
+	c.showInstanceViewWithOrigin(cc, instanceID, viewOriginTeacher)
+}
+
+func (c *controller) showInstanceViewWithOrigin(cc *proxy.ClientConn, instanceID, origin string) {
+	if origin == "" {
+		origin = viewOriginTeacher
+	}
 	inst, err := c.getInstanceByID(instanceID)
 	if err != nil || inst == nil {
-		c.showMainDashboard(cc)
+		c.showInstanceFallback(cc, origin)
 		return
 	}
-	c.setActiveInstance(cc.Name(), instanceID)
+	c.setActiveInstanceWithOrigin(cc.Name(), instanceID, origin)
 
 	var b strings.Builder
 	b.WriteString("formspec_version[6]")
@@ -329,13 +367,16 @@ func (c *controller) showInstanceView(cc *proxy.ClientConn, instanceID string) {
 
 	b.WriteString(box(0, 0, 10, 1.1, panel))
 	b.WriteString(btn(0.2, 0.2, 1.5, 0.7, "btn_back", "Back"))
-	b.WriteString(coloredLbl(2.0, 0.5, light, "Instance: "+inst.ID))
+	b.WriteString(coloredLbl(2.0, 0.5, light, "Instance: "+inst.Title()))
 	b.WriteString(box(0, 1.1, 10, 0.05, accent))
 
 	// Info Box
 	b.WriteString(box(0.5, 1.5, 9, 3, panel))
 	b.WriteString(coloredLbl(0.8, 2.0, muted, "Template: "+inst.TemplateName))
 	b.WriteString(coloredLbl(0.8, 2.5, muted, "Creator:  "+inst.CreatedBy))
+	if inst.Institute != "" {
+		b.WriteString(coloredLbl(5.0, 2.5, muted, "Institute: "+inst.Institute))
+	}
 
 	statusColor := muted
 	switch inst.Status {
@@ -348,6 +389,9 @@ func (c *controller) showInstanceView(cc *proxy.ClientConn, instanceID string) {
 	}
 	b.WriteString(fmt.Sprintf("label[0.8,3.0;%s]", fmtEsc(mcColorize(muted, "Status:   ")+mcColorize(statusColor, inst.Status))))
 	b.WriteString(coloredLbl(0.8, 3.5, muted, "Address:  "+inst.ProxyName))
+	if inst.DisplayName != "" {
+		b.WriteString(coloredLbl(0.8, 4.0, muted, "ID:       "+inst.ID))
+	}
 
 	// Controls
 	b.WriteString(box(0.5, 4.8, 9, 4.5, panel))
@@ -372,59 +416,182 @@ func (c *controller) showInstanceView(cc *proxy.ClientConn, instanceID string) {
 	cc.ShowFormspec("classrooms:instance", b.String())
 }
 
+func (c *controller) showInstanceFallback(cc *proxy.ClientConn, origin string) {
+	switch origin {
+	case viewOriginAdminClasses:
+		if classID, ok := c.getActiveClass(cc.Name()); ok {
+			c.showClassViewWithOrigin(cc, classID, viewOriginAdminClasses)
+			return
+		}
+		c.showAdminPanelTab(cc, "classes")
+	case viewOriginAdminInstances:
+		c.showAdminPanelTab(cc, "instances")
+	default:
+		c.showMainDashboard(cc)
+	}
+}
+
 // ── Admin Panel ─────────────────────────────────────────────────────────────
 
 func (c *controller) showAdminPanel(cc *proxy.ClientConn) {
+	c.showAdminPanelTab(cc, "instances")
+}
+
+func (c *controller) showAdminPanelTab(cc *proxy.ClientConn, activeTab string) {
 	if !c.isAdmin(cc.Name()) {
 		c.showMainDashboard(cc)
 		return
 	}
 
-	instances, _ := c.getAllActiveInstances()
-	teachers, _ := c.listTeachers()
+	if activeTab != "teachers" && activeTab != "classes" {
+		activeTab = "instances"
+	}
+	c.setAdminTab(cc.Name(), activeTab)
 
 	var b strings.Builder
 	b.WriteString("formspec_version[6]")
-	b.WriteString("size[14,10]")
+	b.WriteString("size[14,8.6]")
 	b.WriteString(fmt.Sprintf("bgcolor[%s;true]", headerColor))
 
-	b.WriteString(box(0, 0, 14, 1.1, panel))
-	b.WriteString(btn(0.2, 0.2, 1.5, 0.7, "btn_back", "Back"))
-	b.WriteString(coloredLbl(2.0, 0.5, accent, "| "))
-	b.WriteString(coloredLbl(2.4, 0.5, light, "Classrooms - GLOBAL ADMIN"))
-	b.WriteString(box(0, 1.1, 14, 0.05, danger))
+	b.WriteString(box(0, 0, 14, 0.85, panel))
+	b.WriteString(coloredLbl(0.4, 0.38, accent, "| "))
+	b.WriteString(coloredLbl(0.8, 0.38, light, "Classrooms - GLOBAL ADMIN"))
+	b.WriteString(btnExit(12.45, 0.15, 1.25, 0.52, "btn_close", "Close"))
+	b.WriteString(box(0, 0.85, 14, 0.04, danger))
 
-	// Instances list (Left)
-	b.WriteString(coloredLbl(0.5, 1.5, muted, "ALL INSTANCES"))
-	b.WriteString("scroll_container[0.3,1.8;8,7.5;scr_admin_inst;vertical;0.1]")
-	iy := 0.1
-	for _, inst := range instances {
-		b.WriteString(box(0, iy, 7.5, 1.2, panel))
-		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", iy+0.4, fmtEsc(mcColorize(light, inst.ID))))
-		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", iy+0.8, fmtEsc(mcColorize(muted, inst.CreatedBy+" | "+inst.Status))))
-		b.WriteString(fmt.Sprintf("button[5.5,%g;1.8,0.8;open_inst_%s;Open]", iy+0.2, fmtEsc(inst.ID)))
-		iy += 1.4
+	b.WriteString(btn(0.35, 1.05, 1.7, 0.5, "btn_admin_tab_instances", tabLabel(activeTab == "instances", "Instances")))
+	b.WriteString(btn(2.15, 1.05, 1.7, 0.5, "btn_admin_tab_classes", tabLabel(activeTab == "classes", "Classes")))
+	b.WriteString(btn(3.95, 1.05, 1.7, 0.5, "btn_admin_tab_teachers", tabLabel(activeTab == "teachers", "Teachers")))
+
+	if activeTab == "teachers" {
+		c.writeAdminTeachersTab(&b)
+	} else if activeTab == "classes" {
+		c.writeAdminClassesTab(cc, &b)
+	} else {
+		c.writeAdminInstancesTab(cc, &b)
 	}
-	b.WriteString("scroll_container_end[]")
-
-	// Teachers list (Right)
-	b.WriteString(coloredLbl(8.8, 1.5, muted, "TEACHERS"))
-	b.WriteString(box(8.5, 1.8, 5.2, 7.5, panel))
-
-	b.WriteString("field[8.7,2.1;3.5,0.7;new_teacher_name;;]")
-	b.WriteString(btn(12.3, 2.1, 1.2, 0.7, "btn_admin_add_teacher", "Add"))
-
-	b.WriteString("scroll_container[8.7,3.0;4.8,6.0;scr_admin_teachers;vertical;0.1]")
-	ty := 0.1
-	sort.Strings(teachers)
-	for _, t := range teachers {
-		b.WriteString(fmt.Sprintf("label[0,%g;%s]", ty+0.3, fmtEsc(t)))
-		b.WriteString(fmt.Sprintf("button[3.2,%g;1.2,0.6;rm_teacher_%s;%s]", ty, fmtEsc(t), fmtEsc(mcColorize(danger, "Rm"))))
-		ty += 0.8
-	}
-	b.WriteString("scroll_container_end[]")
 
 	cc.ShowFormspec("classrooms:admin", b.String())
+}
+
+func tabLabel(active bool, label string) string {
+	if active {
+		return mcColorize(accent, label)
+	}
+	return label
+}
+
+func (c *controller) writeAdminInstancesTab(cc *proxy.ClientConn, b *strings.Builder) {
+	institute, teacher := c.getAdminFilters(cc.Name())
+	instances, _ := c.getFilteredActiveInstances(institute, teacher)
+
+	b.WriteString(coloredLbl(0.35, 1.85, muted, "ALL INSTANCES"))
+	c.writeAdminFilters(b, institute, teacher)
+	b.WriteString(adminScroll("scr_admin_inst", len(instances)))
+	b.WriteString("scroll_container[0.2,3.0;13.15,5.25;scr_admin_inst;vertical;0.1]")
+	iy := 0.05
+	for _, inst := range instances {
+		b.WriteString(box(0, iy, 13.0, 0.85, panel))
+		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", iy+0.28, fmtEsc(mcColorize(light, inst.Title()))))
+		detail := inst.CreatedBy + " | " + inst.Status
+		if inst.Institute != "" {
+			detail = inst.Institute + " | " + detail
+		}
+		if inst.DisplayName != "" {
+			detail = detail + " | " + inst.ID
+		}
+		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", iy+0.58, fmtEsc(mcColorize(muted, detail))))
+		b.WriteString(fmt.Sprintf("button[11.55,%g;1.0,0.55;open_inst_%s;Open]", iy+0.14, fmtEsc(inst.ID)))
+		iy += 0.95
+	}
+	b.WriteString("scroll_container_end[]")
+}
+
+func (c *controller) writeAdminClassesTab(cc *proxy.ClientConn, b *strings.Builder) {
+	institute, teacher := c.getAdminFilters(cc.Name())
+	classes, _ := c.getFilteredClasses(institute, teacher)
+
+	b.WriteString(coloredLbl(0.35, 1.85, muted, "ALL CLASSES"))
+	c.writeAdminFilters(b, institute, teacher)
+	if len(classes) == 0 {
+		b.WriteString(coloredLbl(0.5, 3.35, muted, "No classes match the current filters."))
+		return
+	}
+
+	b.WriteString(adminScroll("scr_admin_classes", len(classes)))
+	b.WriteString("scroll_container[0.2,3.0;13.15,5.25;scr_admin_classes;vertical;0.1]")
+	y := 0.05
+	for _, cls := range classes {
+		students, _ := c.getStudents(cls.ID)
+		instances, _ := c.getInstancesForClass(cls.ID)
+		b.WriteString(box(0, y, 13.0, 0.85, panel))
+		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", y+0.28, fmtEsc(mcColorize(light, cls.Name))))
+		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", y+0.58, fmtEsc(mcColorize(muted,
+			fmt.Sprintf("Owner: %s | Students: %d | Instances: %d", cls.CreatedBy, len(students), len(instances))))))
+		b.WriteString(fmt.Sprintf("button[10.65,%g;0.9,0.55;open_class_%d;Open]", y+0.14, cls.ID))
+		b.WriteString(fmt.Sprintf("button[11.7,%g;1.0,0.55;del_class_%d;%s]", y+0.14, cls.ID, fmtEsc(mcColorize(danger, "Del"))))
+		y += 0.95
+	}
+	b.WriteString("scroll_container_end[]")
+}
+
+func adminScroll(name string, itemCount int) string {
+	return scrollbarFor(name, 13.45, 3.0, 5.25, itemCount, 0.95, 0.05)
+}
+
+func scrollbarFor(name string, x, y, h float64, itemCount int, rowStep, topPad float64) string {
+	const (
+		factor = 0.1
+	)
+	contentHeight := topPad + float64(itemCount)*rowStep
+	if contentHeight <= h {
+		return ""
+	}
+	max := int((contentHeight - h) / factor)
+	if max < 1 {
+		max = 1
+	}
+	return fmt.Sprintf("scrollbaroptions[min=0;max=%d;smallstep=4;largestep=16;arrows=default]scrollbar[%g,%g;0.25,%g;vertical;%s;0]", max, x, y, h, name)
+}
+
+func (c *controller) writeAdminFilters(b *strings.Builder, institute, teacher string) {
+	b.WriteString(box(0.2, 2.12, 13.55, 0.72, panel))
+	b.WriteString(coloredLbl(0.45, 2.46, muted, "Institute"))
+	b.WriteString("field[1.55,2.25;3.35,0.45;admin_filter_institute;;")
+	b.WriteString(fmtEsc(institute))
+	b.WriteString("]")
+	b.WriteString(coloredLbl(5.15, 2.46, muted, "Teacher"))
+	b.WriteString("field[6.05,2.25;3.35,0.45;admin_filter_teacher;;")
+	b.WriteString(fmtEsc(teacher))
+	b.WriteString("]")
+	b.WriteString(btn(9.85, 2.25, 1.1, 0.5, "btn_admin_filter_apply", "Filter"))
+	b.WriteString(btn(11.1, 2.25, 1.1, 0.5, "btn_admin_filter_clear", "Clear"))
+}
+
+func (c *controller) writeAdminTeachersTab(b *strings.Builder) {
+	teachers, _ := c.listTeacherRecords()
+
+	b.WriteString(coloredLbl(0.35, 1.85, muted, "TEACHERS"))
+	b.WriteString(box(0.2, 2.12, 13.55, 0.72, panel))
+	b.WriteString(coloredLbl(0.45, 2.46, muted, "Username"))
+	b.WriteString("field[1.65,2.25;3.35,0.45;new_teacher_name;;]")
+	b.WriteString(coloredLbl(5.15, 2.46, muted, "Institute"))
+	b.WriteString("field[6.05,2.25;3.35,0.45;new_teacher_institute;;]")
+	b.WriteString(btn(9.85, 2.25, 1.1, 0.5, "btn_admin_add_teacher", "Add"))
+
+	b.WriteString(adminScroll("scr_admin_teachers", len(teachers)))
+	b.WriteString("scroll_container[0.2,3.0;13.15,5.25;scr_admin_teachers;vertical;0.1]")
+	ty := 0.05
+	for _, t := range teachers {
+		fieldName := "teacher_institute_" + t.Username
+		b.WriteString(box(0, ty, 13.0, 0.85, panel))
+		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", ty+0.32, fmtEsc(t.Username)))
+		b.WriteString(fmt.Sprintf("field[4.1,%g;5.0,0.45;%s;;%s]", ty+0.14, fmtEsc(fieldName), fmtEsc(t.Institute)))
+		b.WriteString(fmt.Sprintf("button[9.45,%g;1.0,0.55;save_teacher_%s;Save]", ty+0.14, fmtEsc(t.Username)))
+		b.WriteString(fmt.Sprintf("button[10.6,%g;0.9,0.55;rm_teacher_%s;%s]", ty+0.14, fmtEsc(t.Username), fmtEsc(mcColorize(danger, "Rm"))))
+		ty += 0.95
+	}
+	b.WriteString("scroll_container_end[]")
 }
 
 // ── Student Names List ──────────────────────────────────────────────────────
@@ -435,23 +602,27 @@ func (c *controller) showStudentEditor(cc *proxy.ClientConn, classID int) {
 
 	var b strings.Builder
 	b.WriteString("formspec_version[6]")
-	b.WriteString("size[8,10]")
+	b.WriteString("size[8,8.6]")
 	b.WriteString(fmt.Sprintf("bgcolor[%s;true]", headerColor))
 
-	b.WriteString(box(0, 0, 8, 1.1, panel))
-	b.WriteString(btn(0.2, 0.2, 1.2, 0.7, "btn_back", "Back"))
-	b.WriteString(coloredLbl(1.6, 0.5, light, "Edit Students: "+cls.Name))
-	b.WriteString(box(0, 1.1, 8, 0.05, accent))
+	b.WriteString(box(0, 0, 8, 0.85, panel))
+	b.WriteString(btn(0.2, 0.15, 1.2, 0.52, "btn_back", "Back"))
+	b.WriteString(coloredLbl(1.6, 0.38, light, "Students: "+cls.Name))
+	b.WriteString(btnExit(6.55, 0.15, 1.2, 0.52, "btn_close", "Close"))
+	b.WriteString(box(0, 0.85, 8, 0.04, accent))
 
-	b.WriteString("field[0.5,1.7;5.5,0.8;add_student_name;;]")
-	b.WriteString(btn(6.2, 1.7, 1.3, 0.8, "btn_add_student", "Add"))
+	b.WriteString(box(0.25, 1.15, 7.5, 0.72, panel))
+	b.WriteString("field[0.55,1.28;5.3,0.5;add_student_name;;]")
+	b.WriteString(btn(6.05, 1.27, 1.2, 0.52, "btn_add_student", "Add"))
 
-	b.WriteString("scroll_container[0.5,3.0;7,6;scr_edit_students;vertical;0.1]")
-	y := 0.1
+	b.WriteString(scrollbarFor("scr_edit_students", 7.35, 2.1, 6.1, len(students), 0.75, 0.05))
+	b.WriteString("scroll_container[0.35,2.1;6.9,6.1;scr_edit_students;vertical;0.1]")
+	y := 0.05
 	for _, s := range students {
-		b.WriteString(fmt.Sprintf("label[0,%g;%s]", y+0.35, fmtEsc(s)))
-		b.WriteString(fmt.Sprintf("button[5.5,%g;1.2,0.7;rm_student_%s;%s]", y, fmtEsc(s), fmtEsc(mcColorize(danger, "Rm"))))
-		y += 0.9
+		b.WriteString(box(0, y, 6.75, 0.65, panel))
+		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", y+0.25, fmtEsc(s)))
+		b.WriteString(fmt.Sprintf("button[5.55,%g;0.8,0.45;rm_student_%s;%s]", y+0.1, fmtEsc(s), fmtEsc(mcColorize(danger, "Rm"))))
+		y += 0.75
 	}
 	b.WriteString("scroll_container_end[]")
 

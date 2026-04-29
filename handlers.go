@@ -33,7 +33,42 @@ func (c *controller) notify(cc *proxy.ClientConn, msg string) {
 	cc.SendChatMsg("[Classrooms] " + msg)
 }
 
+func cleanInstanceDisplayName(name string) string {
+	name = strings.TrimSpace(name)
+	name = strings.ReplaceAll(name, "\n", " ")
+	name = strings.ReplaceAll(name, "\r", " ")
+	name = strings.ReplaceAll(name, ";", " ")
+	if len(name) > 100 {
+		name = name[:100]
+	}
+	return name
+}
+
+func activeClassPtr(hasClass bool, classID int) *int {
+	if !hasClass {
+		return nil
+	}
+	id := classID
+	return &id
+}
+
 func (c *controller) showParentForInstance(cc *proxy.ClientConn, inst *instanceData) {
+	switch c.getActiveInstanceOrigin(cc.Name()) {
+	case viewOriginAdminInstances:
+		c.showAdminPanelTab(cc, "instances")
+		return
+	case viewOriginAdminClasses:
+		if inst != nil && inst.ClassID != nil {
+			c.showClassViewWithOrigin(cc, *inst.ClassID, viewOriginAdminClasses)
+			return
+		}
+		if classID, ok := c.getActiveClass(cc.Name()); ok {
+			c.showClassViewWithOrigin(cc, classID, viewOriginAdminClasses)
+			return
+		}
+		c.showAdminPanelTab(cc, "classes")
+		return
+	}
 	if inst != nil && inst.ClassID != nil {
 		c.showClassView(cc, *inst.ClassID)
 		return
@@ -111,7 +146,11 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 	fm := fieldMap(fields)
 
 	if _, ok := fm["btn_back"]; ok {
-		c.showMainDashboard(cc)
+		if c.getActiveClassOrigin(cc.Name()) == viewOriginAdminClasses {
+			c.showAdminPanelTab(cc, "classes")
+		} else {
+			c.showMainDashboard(cc)
+		}
 		return
 	}
 
@@ -155,7 +194,11 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 	for k := range fm {
 		if strings.HasPrefix(k, "open_inst_") {
 			instID := strings.TrimPrefix(k, "open_inst_")
-			c.showInstanceView(cc, instID)
+			if c.getActiveClassOrigin(cc.Name()) == viewOriginAdminClasses {
+				c.showInstanceViewWithOrigin(cc, instID, viewOriginAdminClasses)
+			} else {
+				c.showInstanceView(cc, instID)
+			}
 			return
 		}
 		if strings.HasPrefix(k, "tp_to_") {
@@ -181,9 +224,9 @@ func (c *controller) handleTemplatePicker(cc *proxy.ClientConn, fields []mt.Fiel
 
 	if _, ok := fm["btn_back"]; ok {
 		if hasClass {
-			c.showClassView(cc, classID)
+			c.showClassViewWithOrigin(cc, classID, c.getActiveClassOrigin(cc.Name()))
 		} else {
-			c.showAdminPanel(cc)
+			c.showAdminPanelTab(cc, c.getAdminTab(cc.Name()))
 		}
 		return
 	}
@@ -191,6 +234,12 @@ func (c *controller) handleTemplatePicker(cc *proxy.ClientConn, fields []mt.Fiel
 	for k := range fm {
 		if strings.HasPrefix(k, "pick_tpl_") {
 			tName := strings.TrimPrefix(k, "pick_tpl_")
+			displayName := cleanInstanceDisplayName(fm["new_instance_name"])
+			if displayName == "" {
+				c.notify(cc, "Instance name is required.")
+				c.showTemplatePicker(cc, activeClassPtr(hasClass, classID))
+				return
+			}
 			player := cc.Name()
 			if !c.beginOp(player) {
 				c.notify(cc, "Another server operation is already running. Please wait for it to finish.")
@@ -203,12 +252,12 @@ func (c *controller) handleTemplatePicker(cc *proxy.ClientConn, fields []mt.Fiel
 				pClassID = &classIDCopy
 			}
 
-			c.showInstanceProgress(cc, "Creating server", "Provisioning a new "+tName+" instance.")
+			c.showInstanceProgress(cc, "Creating server", "Provisioning "+displayName+".")
 
 			go func() {
 				defer c.endOp(player)
 
-				inst, err := c.provisionInstance(pClassID, player, tName)
+				inst, err := c.provisionInstance(pClassID, player, tName, displayName)
 				liveCC := proxy.Find(player)
 				if liveCC == nil {
 					return
@@ -258,7 +307,7 @@ func (c *controller) handleInstanceReady(cc *proxy.ClientConn, fields []mt.Field
 		return
 	}
 	if _, ok := fm["btn_ready_open"]; ok {
-		c.showInstanceView(cc, inst.ID)
+		c.showInstanceViewWithOrigin(cc, inst.ID, c.getActiveInstanceOrigin(cc.Name()))
 		return
 	}
 	if _, ok := fm["btn_ready_close"]; ok {
@@ -270,7 +319,7 @@ func (c *controller) handleInstanceError(cc *proxy.ClientConn, fields []mt.Field
 	fm := fieldMap(fields)
 	if _, ok := fm["btn_error_open"]; ok {
 		if instID, ok := c.getActiveInstance(cc.Name()); ok {
-			c.showInstanceView(cc, instID)
+			c.showInstanceViewWithOrigin(cc, instID, c.getActiveInstanceOrigin(cc.Name()))
 			return
 		}
 	}
@@ -287,6 +336,7 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 		c.showMainDashboard(cc)
 		return
 	}
+	origin := c.getActiveInstanceOrigin(cc.Name())
 	inst, _ := c.getInstanceByID(instID)
 	fm := fieldMap(fields)
 
@@ -332,7 +382,7 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 				c.notify(cc, "Stop failed: "+err.Error())
 			}
 		}()
-		c.showInstanceView(cc, instID)
+		c.showInstanceViewWithOrigin(cc, instID, origin)
 		return
 	}
 
@@ -343,11 +393,7 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 				c.notify(cc, "Delete failed: "+err.Error())
 			}
 		}()
-		if inst.ClassID != nil {
-			c.showClassView(cc, *inst.ClassID)
-		} else {
-			c.showAdminPanel(cc)
-		}
+		c.showInstanceFallback(cc, origin)
 		return
 	}
 
@@ -369,7 +415,7 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 			c.addInstanceInvite(instID, invitee)
 			c.notify(cc, "Invited "+invitee)
 		}
-		c.showInstanceView(cc, instID)
+		c.showInstanceViewWithOrigin(cc, instID, origin)
 		return
 	}
 }
@@ -383,29 +429,84 @@ func (c *controller) handleAdminPanel(cc *proxy.ClientConn, fields []mt.Field) {
 	fm := fieldMap(fields)
 
 	if _, ok := fm["btn_back"]; ok {
-		c.showMainDashboard(cc)
+		return
+	}
+	if _, ok := fm["btn_close"]; ok {
+		return
+	}
+
+	if _, ok := fm["btn_admin_tab_instances"]; ok {
+		c.showAdminPanelTab(cc, "instances")
+		return
+	}
+
+	if _, ok := fm["btn_admin_tab_classes"]; ok {
+		c.showAdminPanelTab(cc, "classes")
+		return
+	}
+
+	if _, ok := fm["btn_admin_tab_teachers"]; ok {
+		c.showAdminPanelTab(cc, "teachers")
+		return
+	}
+
+	if _, ok := fm["btn_admin_filter_apply"]; ok {
+		institute := strings.TrimSpace(fm["admin_filter_institute"])
+		teacher := strings.TrimSpace(fm["admin_filter_teacher"])
+		c.setAdminFilters(cc.Name(), institute, teacher)
+		c.showAdminPanelTab(cc, c.getAdminTab(cc.Name()))
+		return
+	}
+
+	if _, ok := fm["btn_admin_filter_clear"]; ok {
+		c.setAdminFilters(cc.Name(), "", "")
+		c.showAdminPanelTab(cc, c.getAdminTab(cc.Name()))
 		return
 	}
 
 	if _, ok := fm["btn_admin_add_teacher"]; ok {
 		tName := strings.TrimSpace(fm["new_teacher_name"])
 		if tName != "" {
-			c.addTeacher(tName)
+			institute := strings.TrimSpace(fm["new_teacher_institute"])
+			c.addTeacherWithInstitute(tName, institute)
 		}
-		c.showAdminPanel(cc)
+		c.showAdminPanelTab(cc, "teachers")
 		return
 	}
 
 	for k := range fm {
 		if strings.HasPrefix(k, "open_inst_") {
 			instID := strings.TrimPrefix(k, "open_inst_")
-			c.showInstanceView(cc, instID)
+			c.showInstanceViewWithOrigin(cc, instID, viewOriginAdminInstances)
+			return
+		}
+		if strings.HasPrefix(k, "open_class_") {
+			idStr := strings.TrimPrefix(k, "open_class_")
+			id, _ := strconv.Atoi(idStr)
+			c.showClassViewWithOrigin(cc, id, viewOriginAdminClasses)
+			return
+		}
+		if strings.HasPrefix(k, "del_class_") {
+			idStr := strings.TrimPrefix(k, "del_class_")
+			id, _ := strconv.Atoi(idStr)
+			if ok, msg := c.deleteClass(cc.Name(), id); !ok {
+				c.notify(cc, msg)
+			}
+			c.showAdminPanelTab(cc, "classes")
 			return
 		}
 		if strings.HasPrefix(k, "rm_teacher_") {
 			tName := strings.TrimPrefix(k, "rm_teacher_")
 			c.removeTeacher(tName)
-			c.showAdminPanel(cc)
+			c.showAdminPanelTab(cc, "teachers")
+			return
+		}
+		if strings.HasPrefix(k, "save_teacher_") {
+			tName := strings.TrimPrefix(k, "save_teacher_")
+			fieldName := "teacher_institute_" + tName
+			institute := strings.TrimSpace(fm[fieldName])
+			c.updateTeacherInstitute(tName, institute)
+			c.showAdminPanelTab(cc, "teachers")
 			return
 		}
 	}
@@ -422,7 +523,7 @@ func (c *controller) handleStudentEditor(cc *proxy.ClientConn, fields []mt.Field
 	fm := fieldMap(fields)
 
 	if _, ok := fm["btn_back"]; ok {
-		c.showClassView(cc, classID)
+		c.showClassViewWithOrigin(cc, classID, c.getActiveClassOrigin(cc.Name()))
 		return
 	}
 
