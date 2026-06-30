@@ -116,9 +116,15 @@ type featureLimits struct {
 
 // ── Runtime State (not persisted) ───────────────────────────────────────────
 
+type spawnCaptureRequest struct {
+	InstanceID string
+	Teacher    string
+}
+
 type runtimeState struct {
-	frozenPlayers        map[string]bool     // player -> frozen
-	watchingPlayers      map[string]string   // student -> teacher
+	frozenPlayers        map[string]bool   // player -> frozen
+	watchingPlayers      map[string]string // student -> teacher
+	spawnCaptures        map[string]spawnCaptureRequest
 	activeClass          map[string]int      // player -> class ID they have open
 	activeClassOrigin    map[string]string   // player -> teacher/admin origin
 	activeInstance       map[string]string   // player -> instance ID they have open
@@ -133,6 +139,7 @@ func newRuntimeState() runtimeState {
 	return runtimeState{
 		frozenPlayers:        make(map[string]bool),
 		watchingPlayers:      make(map[string]string),
+		spawnCaptures:        make(map[string]spawnCaptureRequest),
 		activeClass:          make(map[string]int),
 		activeClassOrigin:    make(map[string]string),
 		activeInstance:       make(map[string]string),
@@ -284,7 +291,6 @@ func loadConfig() (classroomsConfig, error) {
 	if cfg.LobbyServer == "" {
 		return classroomsConfig{}, errors.New("lobby_server is required")
 	}
-
 	dbPass := strings.TrimSpace(cfg.DBPassword)
 	if dbPass == "" && cfg.DBPasswordFile != "" {
 		secret, err := os.ReadFile(cfg.DBPasswordFile)

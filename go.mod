@@ -3,8 +3,8 @@ module github.com/fondazione-golinelli/mt-multiserver-proxy-classrooms
 go 1.21.0
 
 require (
-	github.com/HimbeerserverDE/mt v0.0.0-20260120230641-33c6b13d8803
-	github.com/HimbeerserverDE/mt-multiserver-proxy v0.0.0-20260417105539-ffee0d261e44
+	github.com/HimbeerserverDE/mt v0.0.0-20260501223507-c73641265239
+	github.com/HimbeerserverDE/mt-multiserver-proxy v0.0.0-20260623084742-6712ee5b7e00
 	github.com/go-sql-driver/mysql v1.9.3
 )
 

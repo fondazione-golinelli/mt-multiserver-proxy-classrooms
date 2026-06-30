@@ -80,6 +80,20 @@ func migrateDB(db *sql.DB) error {
 			PRIMARY KEY (instance_id, username),
 			FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+		`CREATE TABLE IF NOT EXISTS instance_settings (
+			instance_id              VARCHAR(100) PRIMARY KEY,
+			enable_damage            TINYINT(1) NOT NULL DEFAULT 0,
+			enable_pvp               TINYINT(1) NOT NULL DEFAULT 0,
+			mcl_enable_hunger        TINYINT(1) NOT NULL DEFAULT 0,
+			mobs_spawn               TINYINT(1) NOT NULL DEFAULT 0,
+			only_peaceful_mobs       TINYINT(1) NOT NULL DEFAULT 0,
+			mcl_explosions_griefing  TINYINT(1) NOT NULL DEFAULT 0,
+			static_spawnpoint        VARCHAR(100) DEFAULT NULL,
+			spawn_yaw                DOUBLE DEFAULT NULL,
+			spawn_pitch              DOUBLE DEFAULT NULL,
+			FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 	}
 
 	for _, stmt := range migrations {
@@ -102,6 +116,30 @@ func migrateDB(db *sql.DB) error {
 	}
 	if err := addUniqueIndexIfMissing(db, "class_students", "uniq_class_students_username",
 		"ALTER TABLE class_students ADD UNIQUE KEY uniq_class_students_username (username)"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(db, "instance_settings", "enable_pvp",
+		"ALTER TABLE instance_settings ADD COLUMN enable_pvp TINYINT(1) NOT NULL DEFAULT 0 AFTER enable_damage"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(db, "instance_settings", "mobs_spawn",
+		"ALTER TABLE instance_settings ADD COLUMN mobs_spawn TINYINT(1) NOT NULL DEFAULT 0 AFTER mcl_enable_hunger"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(db, "instance_settings", "only_peaceful_mobs",
+		"ALTER TABLE instance_settings ADD COLUMN only_peaceful_mobs TINYINT(1) NOT NULL DEFAULT 0 AFTER mobs_spawn"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(db, "instance_settings", "static_spawnpoint",
+		"ALTER TABLE instance_settings ADD COLUMN static_spawnpoint VARCHAR(100) DEFAULT NULL AFTER mcl_explosions_griefing"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(db, "instance_settings", "spawn_yaw",
+		"ALTER TABLE instance_settings ADD COLUMN spawn_yaw DOUBLE DEFAULT NULL AFTER static_spawnpoint"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(db, "instance_settings", "spawn_pitch",
+		"ALTER TABLE instance_settings ADD COLUMN spawn_pitch DOUBLE DEFAULT NULL AFTER spawn_yaw"); err != nil {
 		return err
 	}
 

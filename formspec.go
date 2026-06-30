@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	proxy "github.com/HimbeerserverDE/mt-multiserver-proxy"
@@ -392,7 +393,6 @@ func (c *controller) showInstanceViewWithOrigin(cc *proxy.ClientConn, instanceID
 	if inst.DisplayName != "" {
 		b.WriteString(coloredLbl(0.8, 4.0, muted, "ID:       "+inst.ID))
 	}
-
 	// Controls
 	b.WriteString(box(0.5, 4.8, 9, 4.5, panel))
 
@@ -406,14 +406,104 @@ func (c *controller) showInstanceViewWithOrigin(cc *proxy.ClientConn, instanceID
 		b.WriteString(btn(1.0, 5.2, 3.5, 0.8, "btn_inst_start", "Start Server"))
 	}
 
+	b.WriteString(btn(1.0, 7.15, 3.5, 0.65, "btn_inst_settings", "Instance Settings"))
 	b.WriteString(btn(1.0, 8.2, 3.5, 0.8, "btn_inst_delete", mcColorize(danger, "Delete Instance")))
 
 	// Invites
-	b.WriteString(coloredLbl(5.5, 7.2, muted, "Invites (Teacher only):"))
-	b.WriteString("field[5.5,7.7;2.5,0.7;invite_name;;]")
-	b.WriteString(btn(8.1, 7.7, 0.9, 0.7, "btn_invite", "+"))
+	b.WriteString(coloredLbl(5.5, 7.95, muted, "Invites (Teacher only):"))
+	b.WriteString("field[5.5,8.45;2.5,0.7;invite_name;;]")
+	b.WriteString(btn(8.1, 8.45, 0.9, 0.7, "btn_invite", "+"))
 
 	cc.ShowFormspec("classrooms:instance", b.String())
+}
+
+func (c *controller) showInstanceSettings(cc *proxy.ClientConn, instanceID string) {
+	inst, err := c.getInstanceByID(instanceID)
+	if err != nil || inst == nil {
+		c.showInstanceFallback(cc, c.getActiveInstanceOrigin(cc.Name()))
+		return
+	}
+	c.setActiveInstanceWithOrigin(cc.Name(), instanceID, c.getActiveInstanceOrigin(cc.Name()))
+	settings, err := c.getInstanceSettingsOrDefault(instanceID)
+	if err != nil {
+		c.showInstanceError(cc, inst, "Settings error", err.Error())
+		return
+	}
+
+	var b strings.Builder
+	b.WriteString("formspec_version[6]")
+	b.WriteString("size[10,9.4]")
+	b.WriteString(fmt.Sprintf("bgcolor[%s;true]", headerColor))
+
+	b.WriteString(box(0, 0, 10, 0.9, panel))
+	b.WriteString(btn(0.2, 0.15, 1.25, 0.52, "btn_back", "Back"))
+	b.WriteString(coloredLbl(1.75, 0.38, light, "Settings: "+inst.Title()))
+	b.WriteString(box(0, 0.9, 10, 0.04, accent))
+
+	b.WriteString(box(0.5, 1.25, 9, 5.8, panel))
+	b.WriteString(checkbox(0.85, 1.65, "setting_damage", "Damage enabled", settings.EnableDamage))
+	b.WriteString(checkbox(0.85, 2.15, "setting_pvp", "PvP enabled", settings.EnablePVP))
+	b.WriteString(checkbox(0.85, 2.65, "setting_hunger", "Hunger enabled", settings.EnableHunger))
+	b.WriteString(checkbox(0.85, 3.15, "setting_mobs", "Natural mobs enabled", settings.MobsSpawn))
+	b.WriteString(checkbox(0.85, 3.65, "setting_peaceful", "Only peaceful mobs", settings.OnlyPeacefulMobs))
+	b.WriteString(checkbox(0.85, 4.15, "setting_explosions", "Explosion block damage", settings.ExplosionsGriefing))
+	b.WriteString(coloredLbl(0.9, 4.95, muted, "Spawnpoint"))
+	spawn := "not set"
+	if settings.StaticSpawnpoint.Valid && strings.TrimSpace(settings.StaticSpawnpoint.String) != "" {
+		spawn = settings.StaticSpawnpoint.String
+		if settings.SpawnYaw.Valid {
+			spawn += fmt.Sprintf("  yaw %.0f°", math.Mod(settings.SpawnYaw.Float64*180/math.Pi+360, 360))
+		}
+	}
+	b.WriteString(coloredLbl(3.1, 4.95, light, spawn))
+	b.WriteString(btn(3.1, 5.35, 2.4, 0.55, "btn_capture_spawn", "Set To My Position"))
+
+	b.WriteString(box(0.5, 7.25, 9, 0.95, panel))
+	b.WriteString(coloredLbl(0.85, 7.65, muted, "Damage and PvP apply immediately. Hunger, mobs, explosions, and spawnpoint need restart."))
+
+	b.WriteString(btn(0.85, 8.45, 2.2, 0.65, "btn_save_settings", "Save Settings"))
+	if inst.Status == "running" {
+		b.WriteString(btn(3.25, 8.45, 2.4, 0.65, "btn_restart_instance", "Restart Instance"))
+	}
+	b.WriteString(btn(5.85, 8.45, 1.7, 0.65, "btn_back", "Back"))
+
+	cc.ShowFormspec("classrooms:instance_settings", b.String())
+}
+
+func (c *controller) showInstanceRestartConfirm(cc *proxy.ClientConn, instanceID string) {
+	inst, err := c.getInstanceByID(instanceID)
+	if err != nil || inst == nil {
+		c.showInstanceFallback(cc, c.getActiveInstanceOrigin(cc.Name()))
+		return
+	}
+	c.setActiveInstanceWithOrigin(cc.Name(), instanceID, c.getActiveInstanceOrigin(cc.Name()))
+	players := c.playersOnInstance(inst.ProxyName)
+
+	var b strings.Builder
+	b.WriteString("formspec_version[6]")
+	b.WriteString("size[9,6.4]")
+	b.WriteString(fmt.Sprintf("bgcolor[%s;true]", headerColor))
+	b.WriteString(box(0, 0, 9, 0.95, panel))
+	b.WriteString(btn(0.2, 0.18, 1.25, 0.52, "btn_back", "Back"))
+	b.WriteString(coloredLbl(1.75, 0.42, warning, "Apply Pending Settings"))
+	b.WriteString(box(0, 0.95, 9, 0.04, warning))
+	b.WriteString(box(0.5, 1.35, 8, 3.5, panel))
+	b.WriteString(coloredLbl(0.85, 1.85, light, "This will move players to the lobby, restart the instance, then return them."))
+	b.WriteString(coloredLbl(0.85, 2.45, muted, fmt.Sprintf("Players currently inside: %d", len(players))))
+	if len(players) > 0 {
+		list := strings.Join(players, ", ")
+		if len(list) > 90 {
+			list = list[:90] + "..."
+		}
+		b.WriteString(coloredLbl(0.85, 3.05, muted, list))
+	}
+	b.WriteString(btn(1.0, 5.25, 3.0, 0.75, "btn_confirm_restart", "Restart And Return"))
+	b.WriteString(btn(5.0, 5.25, 2.4, 0.75, "btn_back", "Cancel"))
+	cc.ShowFormspec("classrooms:instance_restart", b.String())
+}
+
+func checkbox(x, y float64, name, label string, checked bool) string {
+	return fmt.Sprintf("checkbox[%g,%g;%s;%s;%t]", x, y, fmtEsc(name), fmtEsc(label), checked)
 }
 
 func (c *controller) showInstanceFallback(cc *proxy.ClientConn, origin string) {

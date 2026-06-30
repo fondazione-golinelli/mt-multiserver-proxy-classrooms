@@ -17,6 +17,8 @@ func (c *controller) registerHandlers() {
 	proxy.RegisterOnPlayerReceiveFields("classrooms:instance_ready", c.handleInstanceReady)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:instance_error", c.handleInstanceError)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:instance", c.handleInstanceView)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:instance_settings", c.handleInstanceSettings)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:instance_restart", c.handleInstanceRestart)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:admin", c.handleAdminPanel)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:students", c.handleStudentEditor)
 }
@@ -397,6 +399,11 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 		return
 	}
 
+	if _, ok := fm["btn_inst_settings"]; ok && inst != nil {
+		c.showInstanceSettings(cc, inst.ID)
+		return
+	}
+
 	if _, ok := fm["btn_hop_me"]; ok && inst != nil {
 		if cc.ServerName() != inst.ProxyName {
 			cc.Hop(inst.ProxyName)
@@ -416,6 +423,159 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 			c.notify(cc, "Invited "+invitee)
 		}
 		c.showInstanceViewWithOrigin(cc, instID, origin)
+		return
+	}
+}
+
+// ── Instance Settings Handler ──────────────────────────────────────────────
+
+func (c *controller) handleInstanceSettings(cc *proxy.ClientConn, fields []mt.Field) {
+	instID, ok := c.getActiveInstance(cc.Name())
+	if !ok {
+		c.showMainDashboard(cc)
+		return
+	}
+	inst, _ := c.getInstanceByID(instID)
+	if inst == nil {
+		c.showMainDashboard(cc)
+		return
+	}
+	fm := fieldMap(fields)
+
+	settingChanged := false
+	settings, err := c.getInstanceSettingsOrDefault(inst.ID)
+	if err != nil {
+		c.notify(cc, "Could not load settings: "+err.Error())
+		c.showInstanceViewWithOrigin(cc, inst.ID, c.getActiveInstanceOrigin(cc.Name()))
+		return
+	}
+	if v, ok := fm["setting_damage"]; ok {
+		settings.EnableDamage = boolField(v)
+		settingChanged = true
+	}
+	if v, ok := fm["setting_pvp"]; ok {
+		settings.EnablePVP = boolField(v)
+		settingChanged = true
+	}
+	if v, ok := fm["setting_hunger"]; ok {
+		settings.EnableHunger = boolField(v)
+		settingChanged = true
+	}
+	if v, ok := fm["setting_mobs"]; ok {
+		settings.MobsSpawn = boolField(v)
+		settingChanged = true
+	}
+	if v, ok := fm["setting_peaceful"]; ok {
+		settings.OnlyPeacefulMobs = boolField(v)
+		settingChanged = true
+	}
+	if v, ok := fm["setting_explosions"]; ok {
+		settings.ExplosionsGriefing = boolField(v)
+		settingChanged = true
+	}
+
+	if _, ok := fm["btn_back"]; ok {
+		c.showInstanceViewWithOrigin(cc, inst.ID, c.getActiveInstanceOrigin(cc.Name()))
+		return
+	}
+	if _, ok := fm["btn_capture_spawn"]; ok {
+		if cc.ServerName() != inst.ProxyName {
+			c.notify(cc, "Hop to this instance before saving your position as spawn.")
+			c.showInstanceSettings(cc, inst.ID)
+			return
+		}
+		if !cc.IsModChanJoined(modChannel) {
+			go c.ensureChannelJoin(cc)
+			c.notify(cc, "Instance control channel is still connecting. Try again in a moment.")
+			c.showInstanceSettings(cc, inst.ID)
+			return
+		}
+		requestID := randomSuffix(8)
+		c.mu.Lock()
+		c.runtime.spawnCaptures[requestID] = spawnCaptureRequest{
+			InstanceID: inst.ID,
+			Teacher:    cc.Name(),
+		}
+		c.mu.Unlock()
+		c.sendToPlayerServer(cc.Name(), map[string]string{
+			"action":     "capture_spawnpoint",
+			"player":     cc.Name(),
+			"request_id": requestID,
+		})
+		c.notify(cc, "Asked the server to capture your current position.")
+		c.showInstanceSettings(cc, inst.ID)
+		return
+	}
+	if _, ok := fm["btn_save_settings"]; ok {
+		if err := c.saveInstanceSettings(settings); err != nil {
+			c.notify(cc, "Could not save settings: "+err.Error())
+			c.showInstanceSettings(cc, inst.ID)
+			return
+		}
+		if c.sendSettingsToInstance(inst, settings) {
+			c.notify(cc, "Settings saved. Damage and PvP apply immediately; mob, hunger, explosion, and spawnpoint changes need restart.")
+		} else {
+			c.notify(cc, "Settings saved. Start or join the instance before applying them to luanti.conf.")
+		}
+		c.showInstanceSettings(cc, inst.ID)
+		return
+	}
+	if settingChanged {
+		if err := c.saveInstanceSettings(settings); err != nil {
+			c.notify(cc, "Could not save setting: "+err.Error())
+		}
+		c.showInstanceSettings(cc, inst.ID)
+		return
+	}
+	if _, ok := fm["btn_restart_instance"]; ok {
+		c.showInstanceRestartConfirm(cc, inst.ID)
+		return
+	}
+}
+
+func (c *controller) handleInstanceRestart(cc *proxy.ClientConn, fields []mt.Field) {
+	instID, ok := c.getActiveInstance(cc.Name())
+	if !ok {
+		c.showMainDashboard(cc)
+		return
+	}
+	inst, _ := c.getInstanceByID(instID)
+	if inst == nil {
+		c.showMainDashboard(cc)
+		return
+	}
+	fm := fieldMap(fields)
+	if _, ok := fm["btn_back"]; ok {
+		c.showInstanceSettings(cc, inst.ID)
+		return
+	}
+	if _, ok := fm["btn_confirm_restart"]; ok {
+		player := cc.Name()
+		if !c.beginOp(player) {
+			c.notify(cc, "Another server operation is already running. Please wait for it to finish.")
+			return
+		}
+		displaced := c.playersOnInstance(inst.ProxyName)
+		c.showInstanceProgress(cc, "Applying settings", "Moving players to lobby, restarting, then returning them.")
+		go func() {
+			defer c.endOp(player)
+			if _, err := c.guidedRestartInstance(inst); err != nil {
+				if liveCC := proxy.Find(player); liveCC != nil {
+					c.showInstanceError(liveCC, inst, "Restart failed", err.Error())
+				}
+				return
+			}
+			liveCC := proxy.Find(player)
+			if liveCC == nil {
+				return
+			}
+			c.notify(liveCC, "Restart complete. Returned "+strconv.Itoa(len(displaced))+" displaced players.")
+			updated, err := c.getInstanceByID(inst.ID)
+			if err == nil && updated != nil {
+				inst = updated
+			}
+			c.showInstanceReady(liveCC, inst, "Settings applied")
+		}()
 		return
 	}
 }

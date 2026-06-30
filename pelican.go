@@ -103,46 +103,45 @@ type daemonServer struct {
 
 // ── Pelican Application API ────────────────────────────────────────────────
 
-func (c *controller) createServer(ctx context.Context, playerName string, tpl templateConfig) (applicationServer, error) {
-	timestamp := time.Now().UTC().Format("20060102-150405")
-	suffix := randomSuffix(3)
-	serverName := fmt.Sprintf("%s-%s-%s-%s",
-		sanitizeName(tpl.NamePrefix), sanitizeName(playerName), timestamp, suffix)
-
+func (c *controller) createServer(ctx context.Context, playerName, instanceID string, tpl templateConfig) (applicationServer, error) {
 	adminName := tpl.AdminName
 	if adminName == "" {
 		adminName = playerName
 	}
 
+	env := map[string]string{
+		"LUANTI_SERVER_KIND":      "instance",
+		"INSTANCE_TEMPLATE_NAME":  tpl.TemplateName,
+		"INSTANCE_TEMPLATE_MOUNT": c.cfg.Instance.InstanceTemplateMount,
+		"SERVER_LIST_URL":         tpl.ServerListURL,
+		"COMMUNITY_DOWNLOAD":      "0",
+		"COMMUNITY_GAME_AUTOR":    "",
+		"COMMUNITY_GAME_NAME":     "",
+		"SERVER_DESC":             tpl.ServerDescription,
+		"SERVER_DOMAIN":           tpl.ServerDomain,
+		"DEFAULT_GAME":            c.cfg.DefaultGame,
+		"LUANTI_USER_PATH":        "/home/container/.luanti",
+		"LUANTI_GAME_PATH":        c.cfg.Instance.GamePath,
+		"LUANTI_MOD_PATH":         c.cfg.Instance.ModPath,
+		"LUANTI_MOD_DATA_PATH":    "/home/container/.luanti/mod_data",
+		"SERVER_MAX_USERS":        tpl.ServerMaxUsers,
+		"SERVER_MOTD":             tpl.ServerMOTD,
+		"SERVER_ADMIN_NAME":       adminName,
+		"SERVER_NAME":             instanceID,
+		"SERVER_PASSWORD":         tpl.ServerPassword,
+		"SERVER_URL":              tpl.ServerURL,
+		"SERVER_ANNOUNCE":         fmt.Sprintf("%t", tpl.ServerAnnounce),
+		"WORLD_NAME":              tpl.WorldName,
+		"SERVER_PORT":             fmt.Sprintf("%d", c.cfg.Instance.InternalPort),
+		"BIND_ADDR":               "0.0.0.0",
+	}
+
 	payload := createServerPayload{
-		ExternalID: serverName,
-		Name:       serverName,
-		User:       c.cfg.Instance.UserID,
-		Egg:        c.cfg.Instance.EggID,
-		Environment: map[string]string{
-			"LUANTI_SERVER_KIND":      "instance",
-			"INSTANCE_TEMPLATE_NAME":  tpl.TemplateName,
-			"INSTANCE_TEMPLATE_MOUNT": c.cfg.Instance.InstanceTemplateMount,
-			"SERVER_LIST_URL":         tpl.ServerListURL,
-			"COMMUNITY_DOWNLOAD":      "0",
-			"COMMUNITY_GAME_AUTOR":    "",
-			"COMMUNITY_GAME_NAME":     "",
-			"SERVER_DESC":             tpl.ServerDescription,
-			"SERVER_DOMAIN":           tpl.ServerDomain,
-			"DEFAULT_GAME":            c.cfg.DefaultGame,
-			"MINETEST_GAME_PATH":      c.cfg.Instance.GamePath,
-			"MINETEST_MOD_PATH":       c.cfg.Instance.ModPath,
-			"SERVER_MAX_USERS":        tpl.ServerMaxUsers,
-			"SERVER_MOTD":             tpl.ServerMOTD,
-			"SERVER_ADMIN_NAME":       adminName,
-			"SERVER_NAME":             serverName,
-			"SERVER_PASSWORD":         tpl.ServerPassword,
-			"SERVER_URL":              tpl.ServerURL,
-			"SERVER_ANNOUNCE":         fmt.Sprintf("%t", tpl.ServerAnnounce),
-			"WORLD_NAME":              tpl.WorldName,
-			"SERVER_PORT":             fmt.Sprintf("%d", c.cfg.Instance.InternalPort),
-			"BIND_ADDR":               "0.0.0.0",
-		},
+		ExternalID:    instanceID,
+		Name:          instanceID,
+		User:          c.cfg.Instance.UserID,
+		Egg:           c.cfg.Instance.EggID,
+		Environment:   env,
 		Limits:        c.cfg.Instance.Limits,
 		FeatureLimits: c.cfg.Instance.FeatureLimits,
 		Deploy: deployConfig{
@@ -282,6 +281,15 @@ func (c *controller) stopDaemonServer(ctx context.Context, node nodeEndpoint, se
 	return nil
 }
 
+func (c *controller) restartDaemonServer(ctx context.Context, node nodeEndpoint, serverUUID string) error {
+	body := map[string]string{"action": "restart"}
+	if err := c.daemonRequest(ctx, node, http.MethodPost,
+		fmt.Sprintf("/api/servers/%s/power", serverUUID), body, nil); err != nil {
+		return fmt.Errorf("restart daemon server %s: %w", serverUUID, err)
+	}
+	return nil
+}
+
 func (c *controller) killDaemonServer(ctx context.Context, node nodeEndpoint, serverUUID string) error {
 	body := map[string]string{"action": "kill"}
 	if err := c.daemonRequest(ctx, node, http.MethodPost,
@@ -409,6 +417,12 @@ func sanitizeName(value string) string {
 
 func makeProxyName(prefix, player string) string {
 	return fmt.Sprintf("%s-%s-%s", sanitizeName(prefix), sanitizeName(player), randomSuffix(2))
+}
+
+func makeInstanceID(prefix, player string) string {
+	timestamp := time.Now().UTC().Format("20060102-150405")
+	return fmt.Sprintf("%s-%s-%s-%s",
+		sanitizeName(prefix), sanitizeName(player), timestamp, randomSuffix(3))
 }
 
 func randomSuffix(bytesLen int) string {

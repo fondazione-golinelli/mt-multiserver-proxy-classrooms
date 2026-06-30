@@ -22,8 +22,10 @@ func (c *controller) provisionInstance(classID *int, createdBy, templateName, di
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.cfg.PollTimeoutSeconds)*time.Second)
 	defer cancel()
 
+	instanceID := makeInstanceID(tpl.NamePrefix, createdBy)
+
 	// 1. Create Pelican server
-	appSrv, err := c.createServer(ctx, createdBy, tpl)
+	appSrv, err := c.createServer(ctx, createdBy, instanceID, tpl)
 	if err != nil {
 		return nil, err
 	}
@@ -93,6 +95,79 @@ func (c *controller) provisionInstance(classID *int, createdBy, templateName, di
 	return inst, nil
 }
 
+func (c *controller) playersOnInstance(proxyName string) []string {
+	var players []string
+	for cc := range proxy.Clts() {
+		if cc.ServerName() == proxyName {
+			players = append(players, cc.Name())
+		}
+	}
+	return players
+}
+
+func (c *controller) guidedRestartInstance(inst *instanceData) ([]string, error) {
+	displaced := c.playersOnInstance(inst.ProxyName)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.cfg.PollTimeoutSeconds)*time.Second)
+	defer cancel()
+
+	c.evacuateToLobby(inst.ProxyName)
+	if !proxy.RmServer(inst.ProxyName) {
+		log.Printf("[%s] warning: could not remove server %s from proxy before restart", pluginName, inst.ProxyName)
+	}
+
+	node, err := c.nodeEndpointFor(ctx, inst.NodeID)
+	if err != nil {
+		return displaced, err
+	}
+
+	log.Printf("[%s] restarting instance %s via daemon restart action", pluginName, inst.ID)
+	if err := c.restartDaemonServer(ctx, node, inst.UUID); err != nil {
+		return displaced, err
+	}
+	if err := c.waitForDaemonState(ctx, node, inst.UUID, "running"); err != nil {
+		return displaced, err
+	}
+	if c.cfg.StartGraceSeconds > 0 {
+		select {
+		case <-ctx.Done():
+			return displaced, ctx.Err()
+		case <-time.After(time.Duration(c.cfg.StartGraceSeconds) * time.Second):
+		}
+	}
+	if err := c.registerInstanceBackend(inst); err != nil {
+		return displaced, err
+	}
+	if err := c.updateInstanceStatus(inst.ID, "running"); err != nil {
+		return displaced, err
+	}
+
+	for _, name := range displaced {
+		if cc := proxy.Find(name); cc != nil {
+			_ = cc.Hop(inst.ProxyName)
+		}
+	}
+	go func(instanceID string) {
+		time.Sleep(3 * time.Second)
+		for _, name := range displaced {
+			c.reapplyStates(name)
+		}
+	}(inst.ID)
+
+	return displaced, nil
+}
+
+func (c *controller) registerInstanceBackend(inst *instanceData) error {
+	if ok := proxy.AddServer(inst.ProxyName, proxy.Server{
+		Addr:      inst.BackendAddr,
+		MediaPool: c.cfg.Instance.MediaPool,
+		Groups:    c.cfg.Instance.Groups,
+		Fallback:  c.cfg.LobbyServer,
+	}); !ok {
+		return fmt.Errorf("proxy refused to register server %s", inst.ProxyName)
+	}
+	return nil
+}
+
 // startInstance starts a provisioned server via Wings and registers it with the proxy.
 func (c *controller) startInstance(inst *instanceData) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.cfg.PollTimeoutSeconds)*time.Second)
@@ -120,17 +195,14 @@ func (c *controller) startInstance(inst *instanceData) error {
 		}
 	}
 
-	// Register with proxy
-	if ok := proxy.AddServer(inst.ProxyName, proxy.Server{
-		Addr:      inst.BackendAddr,
-		MediaPool: c.cfg.Instance.MediaPool,
-		Groups:    c.cfg.Instance.Groups,
-		Fallback:  c.cfg.LobbyServer,
-	}); !ok {
-		return fmt.Errorf("proxy refused to register server %s", inst.ProxyName)
+	if err := c.registerInstanceBackend(inst); err != nil {
+		return err
 	}
 
-	return c.updateInstanceStatus(inst.ID, "running")
+	if err := c.updateInstanceStatus(inst.ID, "running"); err != nil {
+		return err
+	}
+	return nil
 }
 
 // evacuateToLobby hops all players on the given server back to the lobby.
