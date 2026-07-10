@@ -107,6 +107,20 @@ func (c *controller) playersOnInstance(proxyName string) []string {
 
 func (c *controller) guidedRestartInstance(inst *instanceData) ([]string, error) {
 	displaced := c.playersOnInstance(inst.ProxyName)
+	settings, err := c.getInstanceSettings(inst.ID)
+	if err != nil {
+		return displaced, fmt.Errorf("load instance settings before restart: %w", err)
+	}
+	if settings != nil {
+		if !c.sendSettingsToInstance(inst, *settings) {
+			return displaced, fmt.Errorf("cannot apply saved settings: join the instance before restarting it")
+		}
+		// The bridge persists restart-required settings asynchronously after the
+		// mod-channel message reaches the backend. Keep the server alive briefly
+		// before evacuating its players and issuing the restart.
+		time.Sleep(time.Second)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.cfg.PollTimeoutSeconds)*time.Second)
 	defer cancel()
 

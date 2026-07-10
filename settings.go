@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"log"
 	"strings"
 
 	proxy "github.com/HimbeerserverDE/mt-multiserver-proxy"
@@ -139,8 +140,11 @@ func (c *controller) sendSettingsToInstance(inst *instanceData, settings instanc
 	}
 	for cc := range proxy.Clts() {
 		if cc.ServerName() == inst.ProxyName {
-			c.sendToPlayerServer(cc.Name(), msg)
-			return true
+			if c.sendToPlayerServer(cc.Name(), msg) {
+				log.Printf("[%s] sent saved settings for instance %s through %s", pluginName, inst.ID, cc.Name())
+				return true
+			}
+			log.Printf("[%s] failed to send saved settings for instance %s through %s", pluginName, inst.ID, cc.Name())
 		}
 	}
 	return false

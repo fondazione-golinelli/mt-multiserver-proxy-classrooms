@@ -427,17 +427,17 @@ func (c *controller) isAdmin(name string) bool {
 
 // sendToPlayerServer sends a mod channel message to the backend server
 // that a specific player is currently connected to.
-func (c *controller) sendToPlayerServer(playerName string, msg interface{}) {
+func (c *controller) sendToPlayerServer(playerName string, msg interface{}) bool {
 	cc := proxy.Find(playerName)
 	if cc == nil {
-		return
+		return false
 	}
 	data, err := json.Marshal(msg)
 	if err != nil {
 		log.Printf("[%s] marshal error: %v", pluginName, err)
-		return
+		return false
 	}
-	cc.SendModChanMsg(modChannel, string(data))
+	return cc.SendModChanMsg(modChannel, string(data))
 }
 
 // getOnlinePlayers returns all player names currently connected to the proxy.
