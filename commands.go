@@ -95,7 +95,7 @@ func (c *controller) handleLobbyCmd(cc *proxy.ClientConn, args ...string) string
 	if cc.ServerName() == c.cfg.LobbyServer {
 		return "You are already in the lobby."
 	}
-	if err := cc.Hop(c.cfg.LobbyServer); err != nil {
+	if err := c.hopPlayer(cc, c.cfg.LobbyServer); err != nil {
 		return "Failed to hop to lobby: " + err.Error()
 	}
 	return ""
@@ -109,6 +109,9 @@ func (c *controller) handleTeacherAddCmd(cc *proxy.ClientConn, args ...string) s
 	if err := c.addTeacher(name); err != nil {
 		return "Error adding teacher: " + err.Error()
 	}
+	if proxy.Find(name) != nil {
+		c.scheduleReapplyStates(name, 0)
+	}
 	return "Teacher " + name + " added."
 }
 
@@ -119,6 +122,9 @@ func (c *controller) handleTeacherRemoveCmd(cc *proxy.ClientConn, args ...string
 	name := args[0]
 	if err := c.removeTeacher(name); err != nil {
 		return "Error removing teacher: " + err.Error()
+	}
+	if proxy.Find(name) != nil {
+		c.scheduleReapplyStates(name, 0)
 	}
 	return "Teacher " + name + " removed."
 }

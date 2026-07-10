@@ -27,7 +27,16 @@ func (c *controller) handleBridgeMessage(cc *proxy.ClientConn, msg string) {
 	if err := json.Unmarshal([]byte(msg), &data); err != nil {
 		return
 	}
-	if data["action"] != "spawnpoint_captured" {
+	action, _ := data["action"].(string)
+	if action == "open_classes" {
+		player, _ := data["player"].(string)
+		if player != cc.Name() || !c.isTeacher(player) {
+			return
+		}
+		c.showMainDashboard(cc)
+		return
+	}
+	if action != "spawnpoint_captured" {
 		return
 	}
 	requestID, _ := data["request_id"].(string)
@@ -97,12 +106,7 @@ func (c *controller) registerJoinLeave() {
 	proxy.RegisterOnJoin(func(cc *proxy.ClientConn) string {
 		name := cc.Name()
 		go c.ensureChannelJoin(cc)
-
-		// Re-apply states after initial join
-		go func() {
-			time.Sleep(2 * time.Second)
-			c.reapplyStates(name)
-		}()
+		c.scheduleReapplyStates(name, 2*time.Second)
 		return ""
 	})
 
@@ -124,6 +128,8 @@ func (c *controller) registerJoinLeave() {
 }
 
 func (c *controller) reapplyStates(playerName string) {
+	c.reapplyTeacherContext(playerName)
+
 	if c.isFrozen(playerName) {
 		c.sendToPlayerServer(playerName, map[string]string{
 			"action": "freeze",
@@ -137,6 +143,53 @@ func (c *controller) reapplyStates(playerName string) {
 			"teacher": teacher,
 		})
 	}
+}
+
+func (c *controller) reapplyTeacherContext(playerName string) {
+	cc := proxy.Find(playerName)
+	if cc == nil || cc.ServerName() == "" {
+		return
+	}
+
+	if !c.isTeacher(playerName) {
+		c.sendToPlayerServer(playerName, map[string]string{
+			"action": "clear_teacher_access",
+			"player": playerName,
+		})
+		return
+	}
+
+	inst, err := c.getInstanceByProxyName(cc.ServerName())
+	if err != nil {
+		log.Printf("[%s] failed to resolve teacher context for %s on %s: %v", pluginName, playerName, cc.ServerName(), err)
+		return
+	}
+
+	action := "clear_teacher_defaults"
+	if inst != nil {
+		action = "set_teacher_defaults"
+	}
+	if !c.sendToPlayerServer(playerName, map[string]string{
+		"action": action,
+		"player": playerName,
+	}) {
+		log.Printf("[%s] failed to apply teacher context %s for %s on %s", pluginName, action, playerName, cc.ServerName())
+	}
+}
+
+func (c *controller) scheduleReapplyStates(playerName string, delay time.Duration) {
+	go func() {
+		time.Sleep(delay)
+		c.reapplyStates(playerName)
+	}()
+}
+
+func (c *controller) hopPlayer(cc *proxy.ClientConn, serverName string) error {
+	if err := cc.Hop(serverName); err != nil {
+		return err
+	}
+	c.scheduleReapplyStates(cc.Name(), 3*time.Second)
+	return nil
 }
 
 func (c *controller) ensureChannelJoin(cc *proxy.ClientConn) {

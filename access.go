@@ -64,10 +64,7 @@ func (c *controller) onChatMsg(cc *proxy.ClientConn, msg string) string {
 			}
 			// Success! Re-apply states after hop.
 			// The proxy will perform the hop after this hook returns.
-			go func(name string) {
-				time.Sleep(3 * time.Second) // Wait for hop to complete
-				c.reapplyStates(name)
-			}(cc.Name())
+			c.scheduleReapplyStates(cc.Name(), 3*time.Second)
 		}
 		return msg
 	}

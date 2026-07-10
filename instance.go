@@ -157,15 +157,9 @@ func (c *controller) guidedRestartInstance(inst *instanceData) ([]string, error)
 
 	for _, name := range displaced {
 		if cc := proxy.Find(name); cc != nil {
-			_ = cc.Hop(inst.ProxyName)
+			_ = c.hopPlayer(cc, inst.ProxyName)
 		}
 	}
-	go func(instanceID string) {
-		time.Sleep(3 * time.Second)
-		for _, name := range displaced {
-			c.reapplyStates(name)
-		}
-	}(inst.ID)
 
 	return displaced, nil
 }
@@ -223,7 +217,7 @@ func (c *controller) startInstance(inst *instanceData) error {
 func (c *controller) evacuateToLobby(serverName string) {
 	for cc := range proxy.Clts() {
 		if cc.ServerName() == serverName {
-			if err := cc.Hop(c.cfg.LobbyServer); err != nil {
+			if err := c.hopPlayer(cc, c.cfg.LobbyServer); err != nil {
 				log.Printf("[%s] failed to hop %s to lobby: %v", pluginName, cc.Name(), err)
 			}
 		}

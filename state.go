@@ -626,7 +626,7 @@ func (c *controller) gatherClass(classID int, teacherName string) {
 		onlineStudents = append(onlineStudents, s)
 
 		if scc.ServerName() != tServer {
-			scc.Hop(tServer)
+			_ = c.hopPlayer(scc, tServer)
 			needsHop = true
 		}
 	}
@@ -667,7 +667,7 @@ func (c *controller) teleportToPlayer(cc *proxy.ClientConn, target string) {
 
 	// Hop teacher to student's server if they're on different servers
 	if teacherServer != studentServer {
-		cc.Hop(studentServer)
+		_ = c.hopPlayer(cc, studentServer)
 		// Give hop time to complete before sending tp command
 		go func() {
 			time.Sleep(2 * time.Second)

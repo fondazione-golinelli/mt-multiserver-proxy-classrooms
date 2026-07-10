@@ -83,12 +83,12 @@ func (c *controller) hopClassToInstance(cc *proxy.ClientConn, inst *instanceData
 		return
 	}
 	if includeTeacher && cc.ServerName() != inst.ProxyName {
-		_ = cc.Hop(inst.ProxyName)
+		_ = c.hopPlayer(cc, inst.ProxyName)
 	}
 	students := c.getOnlineStudents(*inst.ClassID)
 	for _, s := range students {
 		if scc := proxy.Find(s); scc != nil && scc.ServerName() != inst.ProxyName {
-			_ = scc.Hop(inst.ProxyName)
+			_ = c.hopPlayer(scc, inst.ProxyName)
 		}
 	}
 }
@@ -300,7 +300,7 @@ func (c *controller) handleInstanceReady(cc *proxy.ClientConn, fields []mt.Field
 	fm := fieldMap(fields)
 	if _, ok := fm["btn_ready_hop_me"]; ok {
 		if cc.ServerName() != inst.ProxyName {
-			_ = cc.Hop(inst.ProxyName)
+			_ = c.hopPlayer(cc, inst.ProxyName)
 		}
 		return
 	}
@@ -406,7 +406,7 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 
 	if _, ok := fm["btn_hop_me"]; ok && inst != nil {
 		if cc.ServerName() != inst.ProxyName {
-			cc.Hop(inst.ProxyName)
+			_ = c.hopPlayer(cc, inst.ProxyName)
 		}
 		return
 	}
@@ -628,7 +628,9 @@ func (c *controller) handleAdminPanel(cc *proxy.ClientConn, fields []mt.Field) {
 		tName := strings.TrimSpace(fm["new_teacher_name"])
 		if tName != "" {
 			institute := strings.TrimSpace(fm["new_teacher_institute"])
-			c.addTeacherWithInstitute(tName, institute)
+			if c.addTeacherWithInstitute(tName, institute) == nil && proxy.Find(tName) != nil {
+				c.scheduleReapplyStates(tName, 0)
+			}
 		}
 		c.showAdminPanelTab(cc, "teachers")
 		return
@@ -657,7 +659,9 @@ func (c *controller) handleAdminPanel(cc *proxy.ClientConn, fields []mt.Field) {
 		}
 		if strings.HasPrefix(k, "rm_teacher_") {
 			tName := strings.TrimPrefix(k, "rm_teacher_")
-			c.removeTeacher(tName)
+			if c.removeTeacher(tName) == nil && proxy.Find(tName) != nil {
+				c.scheduleReapplyStates(tName, 0)
+			}
 			c.showAdminPanelTab(cc, "teachers")
 			return
 		}
