@@ -150,12 +150,19 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 	b.WriteString(coloredLbl(0.35, 1.25, muted, "STUDENTS"))
 	b.WriteString(box(0.2, 1.55, 6.55, 6.75, panel))
 
-	b.WriteString(btn(0.4, 1.75, 1.9, 0.5, "btn_freeze_all", "Freeze"))
-	b.WriteString(btn(2.45, 1.75, 1.9, 0.5, "btn_unfreeze_all", "Unfreeze"))
-	b.WriteString(btn(4.5, 1.75, 1.9, 0.5, "btn_gather_all", "Gather"))
-	b.WriteString(btn(0.4, 2.35, 1.9, 0.5, "btn_watch_teacher", "Watch"))
-	b.WriteString(btn(2.45, 2.35, 1.9, 0.5, "btn_stop_watching", "Stop Watch"))
-	b.WriteString(btn(4.5, 2.35, 1.9, 0.5, "btn_manage_students", "Edit Names"))
+	freezeLabel := "Freeze"
+	if c.isClassFrozen(classID) {
+		freezeLabel = "Unfreeze"
+	}
+	watchLabel := "Watch"
+	if c.isClassWatching(classID, cc.Name()) {
+		watchLabel = "Unwatch"
+	}
+
+	b.WriteString(btn(0.4, 1.75, 1.9, 0.5, "btn_toggle_freeze", freezeLabel))
+	b.WriteString(btn(2.45, 1.75, 1.9, 0.5, "btn_gather_all", "Gather"))
+	b.WriteString(btn(0.4, 2.35, 1.9, 0.5, "btn_toggle_watch", watchLabel))
+	b.WriteString(btn(2.45, 2.35, 1.9, 0.5, "btn_manage_students", "Edit Students"))
 
 	b.WriteString(scrollbarFor("scr_students", 6.3, 3.1, 4.95, len(students), 0.75, 0.05))
 	b.WriteString("scroll_container[0.4,3.1;5.8,4.95;scr_students;vertical;0.1]")
@@ -407,6 +414,11 @@ func (c *controller) showInstanceViewWithOrigin(cc *proxy.ClientConn, instanceID
 	}
 
 	b.WriteString(btn(1.0, 7.15, 3.5, 0.65, "btn_inst_settings", "Instance Settings"))
+	if c.instanceIsClassWorld(inst) && cc.ServerName() == inst.ProxyName {
+		b.WriteString(btn(5.5, 7.15, 3.5, 0.65, "btn_world_controls", "World Controls"))
+	} else if c.instanceIsClassWorld(inst) {
+		b.WriteString(coloredLbl(5.5, 7.15, muted, "Hop to this class instance to use world controls."))
+	}
 	b.WriteString(btn(1.0, 8.2, 3.5, 0.8, "btn_inst_delete", mcColorize(danger, "Delete Instance")))
 
 	// Invites

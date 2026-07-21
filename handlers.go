@@ -19,6 +19,7 @@ func (c *controller) registerHandlers() {
 	proxy.RegisterOnPlayerReceiveFields("classrooms:instance", c.handleInstanceView)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:instance_settings", c.handleInstanceSettings)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:instance_restart", c.handleInstanceRestart)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:world_controls", c.handleWorldControls)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:admin", c.handleAdminPanel)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:students", c.handleStudentEditor)
 }
@@ -166,23 +167,21 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 		return
 	}
 
-	if _, ok := fm["btn_freeze_all"]; ok {
-		c.freezeClass(classID)
+	if _, ok := fm["btn_toggle_freeze"]; ok {
+		if c.isClassFrozen(classID) {
+			c.unfreezeClass(classID)
+		} else {
+			c.freezeClass(classID)
+		}
 		c.showClassView(cc, classID)
 		return
 	}
-	if _, ok := fm["btn_unfreeze_all"]; ok {
-		c.unfreezeClass(classID)
-		c.showClassView(cc, classID)
-		return
-	}
-	if _, ok := fm["btn_watch_teacher"]; ok {
-		c.watchTeacher(classID, cc.Name())
-		c.showClassView(cc, classID)
-		return
-	}
-	if _, ok := fm["btn_stop_watching"]; ok {
-		c.stopWatching(classID)
+	if _, ok := fm["btn_toggle_watch"]; ok {
+		if c.isClassWatching(classID, cc.Name()) {
+			c.stopWatching(classID)
+		} else {
+			c.watchTeacher(classID, cc.Name())
+		}
 		c.showClassView(cc, classID)
 		return
 	}
@@ -404,6 +403,21 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 		return
 	}
 
+	if _, ok := fm["btn_world_controls"]; ok && inst != nil {
+		if !c.instanceIsClassWorld(inst) {
+			c.notify(cc, "World controls are only available for classroom instances.")
+			c.showInstanceViewWithOrigin(cc, instID, origin)
+			return
+		}
+		if cc.ServerName() != inst.ProxyName {
+			c.notify(cc, "Hop to this instance server before using world controls.")
+			c.showInstanceViewWithOrigin(cc, instID, origin)
+			return
+		}
+		c.showWorldControls(cc, inst.ID)
+		return
+	}
+
 	if _, ok := fm["btn_hop_me"]; ok && inst != nil {
 		if cc.ServerName() != inst.ProxyName {
 			_ = c.hopPlayer(cc, inst.ProxyName)
@@ -529,6 +543,56 @@ func (c *controller) handleInstanceSettings(cc *proxy.ClientConn, fields []mt.Fi
 	}
 	if _, ok := fm["btn_restart_instance"]; ok {
 		c.showInstanceRestartConfirm(cc, inst.ID)
+		return
+	}
+}
+
+func (c *controller) handleWorldControls(cc *proxy.ClientConn, fields []mt.Field) {
+	fm := fieldMap(fields)
+	if _, ok := fm["btn_back"]; ok {
+		if instID, ok := c.getActiveInstance(cc.Name()); ok {
+			c.showInstanceViewWithOrigin(cc, instID, c.getActiveInstanceOrigin(cc.Name()))
+		} else if classID, ok := c.getActiveClass(cc.Name()); ok {
+			c.showClassViewWithOrigin(cc, classID, c.getActiveClassOrigin(cc.Name()))
+		} else {
+			c.showMainDashboard(cc)
+		}
+		return
+	}
+
+	if _, ok := fm["btn_world_day"]; ok {
+		c.applyWorldControls(cc, "day", "", false)
+		c.showWorldControls(cc, "")
+		return
+	}
+	if _, ok := fm["btn_world_evening"]; ok {
+		c.applyWorldControls(cc, "evening", "", false)
+		c.showWorldControls(cc, "")
+		return
+	}
+	if _, ok := fm["btn_world_night"]; ok {
+		c.applyWorldControls(cc, "night", "", false)
+		c.showWorldControls(cc, "")
+		return
+	}
+	if _, ok := fm["btn_world_stop_time"]; ok {
+		c.applyWorldControls(cc, "stop", "", true)
+		c.showWorldControls(cc, "")
+		return
+	}
+	if _, ok := fm["btn_world_resume_time"]; ok {
+		c.applyWorldControls(cc, "", "", false)
+		c.showWorldControls(cc, "")
+		return
+	}
+	if _, ok := fm["btn_world_sunny"]; ok {
+		c.applyWorldControls(cc, "", "sunny", false)
+		c.showWorldControls(cc, "")
+		return
+	}
+	if _, ok := fm["btn_world_rain"]; ok {
+		c.applyWorldControls(cc, "", "rain", false)
+		c.showWorldControls(cc, "")
 		return
 	}
 }

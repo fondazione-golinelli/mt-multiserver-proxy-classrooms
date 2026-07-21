@@ -47,6 +47,25 @@ func (inst instanceData) Title() string {
 	return inst.ID
 }
 
+func (c *controller) instanceIsClassWorld(inst *instanceData) bool {
+	if inst == nil {
+		return false
+	}
+	if inst.ClassID != nil {
+		return true
+	}
+	if c.db == nil || inst.ID == "" {
+		return false
+	}
+
+	var classID sql.NullInt64
+	err := c.db.QueryRow(`SELECT class_id FROM instances WHERE id = ? AND status != 'deleted'`, inst.ID).Scan(&classID)
+	if err != nil {
+		return false
+	}
+	return classID.Valid
+}
+
 // ── Counts (for init log) ──────────────────────────────────────────────────
 
 func (c *controller) countTeachers() (int, error) {
@@ -590,6 +609,24 @@ func (c *controller) unfreezeClass(classID int) {
 	}
 }
 
+func (c *controller) isClassFrozen(classID int) bool {
+	for _, name := range c.getOnlineStudents(classID) {
+		if c.isFrozen(name) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *controller) isClassWatching(classID int, teacherName string) bool {
+	for _, name := range c.getOnlineStudents(classID) {
+		if c.isWatching(name) == teacherName {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *controller) watchTeacher(classID int, teacherName string) {
 	for _, name := range c.getOnlineStudents(classID) {
 		c.mu.Lock()
@@ -780,6 +817,28 @@ func (c *controller) getActiveInstanceOrigin(player string) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.runtime.activeInstanceOrigin[player]
+}
+
+func (c *controller) isInstanceTimeStopped(instanceID string) bool {
+	if instanceID == "" {
+		return false
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.runtime.instanceTimeStopped[instanceID]
+}
+
+func (c *controller) setInstanceTimeStopped(instanceID string, stopped bool) {
+	if instanceID == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if stopped {
+		c.runtime.instanceTimeStopped[instanceID] = true
+		return
+	}
+	delete(c.runtime.instanceTimeStopped, instanceID)
 }
 
 func (c *controller) setAdminTab(player, tab string) {

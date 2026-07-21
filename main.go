@@ -124,6 +124,7 @@ type spawnCaptureRequest struct {
 type runtimeState struct {
 	frozenPlayers        map[string]bool   // player -> frozen
 	watchingPlayers      map[string]string // student -> teacher
+	instanceTimeStopped  map[string]bool   // instance ID -> time is stopped
 	spawnCaptures        map[string]spawnCaptureRequest
 	activeClass          map[string]int      // player -> class ID they have open
 	activeClassOrigin    map[string]string   // player -> teacher/admin origin
@@ -139,6 +140,7 @@ func newRuntimeState() runtimeState {
 	return runtimeState{
 		frozenPlayers:        make(map[string]bool),
 		watchingPlayers:      make(map[string]string),
+		instanceTimeStopped:  make(map[string]bool),
 		spawnCaptures:        make(map[string]spawnCaptureRequest),
 		activeClass:          make(map[string]int),
 		activeClassOrigin:    make(map[string]string),
