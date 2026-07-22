@@ -159,6 +159,19 @@ func (c *controller) reapplyTeacherContext(playerName string) {
 		return
 	}
 
+	// Proxy administrators already manage their own backend privileges. Give
+	// them the teacher panel without changing gamemode, fly, fast, or any
+	// other server-local privilege.
+	if c.isAdmin(playerName) {
+		if !c.sendToPlayerServer(playerName, map[string]string{
+			"action": "set_teacher_access",
+			"player": playerName,
+		}) {
+			log.Printf("[%s] failed to apply admin teacher access for %s on %s", pluginName, playerName, cc.ServerName())
+		}
+		return
+	}
+
 	inst, err := c.getInstanceByProxyName(cc.ServerName())
 	if err != nil {
 		log.Printf("[%s] failed to resolve teacher context for %s on %s: %v", pluginName, playerName, cc.ServerName(), err)
