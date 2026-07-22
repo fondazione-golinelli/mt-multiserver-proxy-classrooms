@@ -57,6 +57,21 @@ func migrateDB(db *sql.DB) error {
 			FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
+		`CREATE TABLE IF NOT EXISTS class_teachers (
+			class_id INT         NOT NULL,
+			username VARCHAR(50) NOT NULL,
+			PRIMARY KEY (class_id, username),
+			FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+			FOREIGN KEY (username) REFERENCES teachers(username) ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+		`CREATE TABLE IF NOT EXISTS class_assistants (
+			class_id INT         NOT NULL,
+			username VARCHAR(50) NOT NULL,
+			PRIMARY KEY (class_id, username),
+			FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
 		`CREATE TABLE IF NOT EXISTS instances (
 			id            VARCHAR(100) PRIMARY KEY,
 			class_id      INT,

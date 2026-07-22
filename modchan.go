@@ -30,7 +30,7 @@ func (c *controller) handleBridgeMessage(cc *proxy.ClientConn, msg string) {
 	action, _ := data["action"].(string)
 	if action == "open_classes" {
 		player, _ := data["player"].(string)
-		if player != cc.Name() || !c.isTeacher(player) {
+		if player != cc.Name() || !c.hasClassPanelAccess(player) {
 			return
 		}
 		c.showMainDashboard(cc)
@@ -151,7 +151,13 @@ func (c *controller) reapplyTeacherContext(playerName string) {
 		return
 	}
 
-	if !c.isTeacher(playerName) {
+	if !c.hasClassPanelAccess(playerName) {
+		// First restore survival and remove managed privileges, then remove the
+		// permanent panel item. This also handles a live Assistance removal.
+		c.sendToPlayerServer(playerName, map[string]string{
+			"action": "clear_teacher_defaults",
+			"player": playerName,
+		})
 		c.sendToPlayerServer(playerName, map[string]string{
 			"action": "clear_teacher_access",
 			"player": playerName,
@@ -179,7 +185,7 @@ func (c *controller) reapplyTeacherContext(playerName string) {
 	}
 
 	action := "clear_teacher_defaults"
-	if inst != nil {
+	if inst != nil && inst.ClassID != nil && c.canEditClassStudents(*inst.ClassID, playerName) {
 		action = "set_teacher_defaults"
 	}
 	if !c.sendToPlayerServer(playerName, map[string]string{

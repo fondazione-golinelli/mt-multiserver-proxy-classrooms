@@ -167,11 +167,10 @@ func (c *controller) listTeachers() ([]string, error) {
 
 // ── Class management ───────────────────────────────────────────────────────
 
-// getClasses returns classes visible to a teacher.
-// Admins see all classes, teachers see only their own.
-func (c *controller) getClasses(teacherName string) ([]classData, error) {
-	cc := proxy.Find(teacherName)
-	isAdmin := cc != nil && cc.HasPerms("server")
+// getClasses returns every class visible to the player through ownership,
+// linked-teacher membership, assistance membership, or administrator access.
+func (c *controller) getClasses(playerName string) ([]classData, error) {
+	isAdmin := c.isAdmin(playerName)
 
 	var rows *sql.Rows
 	var err error
@@ -179,9 +178,13 @@ func (c *controller) getClasses(teacherName string) ([]classData, error) {
 		rows, err = c.db.Query(
 			"SELECT id, name, created_by, created_at FROM classes ORDER BY name")
 	} else {
-		rows, err = c.db.Query(
-			"SELECT id, name, created_by, created_at FROM classes WHERE created_by = ? ORDER BY name",
-			teacherName)
+		rows, err = c.db.Query(`
+			SELECT DISTINCT c.id, c.name, c.created_by, c.created_at
+			FROM classes c
+			LEFT JOIN class_teachers ct ON ct.class_id = c.id AND ct.username = ?
+			LEFT JOIN class_assistants ca ON ca.class_id = c.id AND ca.username = ?
+			WHERE c.created_by = ? OR ct.username IS NOT NULL OR ca.username IS NOT NULL
+			ORDER BY c.name`, playerName, playerName, playerName)
 	}
 	if err != nil {
 		return nil, err
@@ -197,6 +200,199 @@ func (c *controller) getClasses(teacherName string) ([]classData, error) {
 		result = append(result, cd)
 	}
 	return result, rows.Err()
+}
+
+func (c *controller) isLinkedTeacherInClass(classID int, playerName string) bool {
+	var exists int
+	err := c.db.QueryRow(
+		"SELECT 1 FROM class_teachers WHERE class_id = ? AND username = ?",
+		classID, playerName).Scan(&exists)
+	return err == nil
+}
+
+func (c *controller) isAssistantInClass(classID int, playerName string) bool {
+	var exists int
+	err := c.db.QueryRow(
+		"SELECT 1 FROM class_assistants WHERE class_id = ? AND username = ?",
+		classID, playerName).Scan(&exists)
+	return err == nil
+}
+
+func (c *controller) isAssistant(playerName string) bool {
+	var exists int
+	err := c.db.QueryRow(
+		"SELECT 1 FROM class_assistants WHERE username = ? LIMIT 1",
+		playerName).Scan(&exists)
+	return err == nil
+}
+
+func (c *controller) canManageClass(classID int, playerName string) bool {
+	if c.isAdmin(playerName) {
+		return true
+	}
+	cls, err := c.getClassByID(classID)
+	return err == nil && cls != nil &&
+		(cls.CreatedBy == playerName || c.isLinkedTeacherInClass(classID, playerName))
+}
+
+func (c *controller) canEditClassStudents(classID int, playerName string) bool {
+	return c.canManageClass(classID, playerName) || c.isAssistantInClass(classID, playerName)
+}
+
+func (c *controller) canViewClass(classID int, playerName string) bool {
+	return c.canEditClassStudents(classID, playerName)
+}
+
+func (c *controller) canManageInstance(inst *instanceData, playerName string) bool {
+	if inst == nil {
+		return false
+	}
+	if c.isAdmin(playerName) {
+		return true
+	}
+	if inst.ClassID != nil {
+		return c.canManageClass(*inst.ClassID, playerName)
+	}
+	return inst.CreatedBy == playerName && c.isTeacher(playerName)
+}
+
+func (c *controller) getClassTeachers(classID int) ([]string, error) {
+	rows, err := c.db.Query(
+		"SELECT username FROM class_teachers WHERE class_id = ? ORDER BY username", classID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		result = append(result, name)
+	}
+	return result, rows.Err()
+}
+
+func (c *controller) addClassTeacher(classID int, teacherName string) (bool, string) {
+	teacherName = strings.TrimSpace(teacherName)
+	if teacherName == "" || len(teacherName) > 50 {
+		return false, "Teacher name must be 1-50 characters."
+	}
+	cls, err := c.getClassByID(classID)
+	if err != nil || cls == nil {
+		return false, "Class not found."
+	}
+	if cls.CreatedBy == teacherName {
+		return false, teacherName + " already owns this class."
+	}
+	wasRegistered, err := c.getTeacher(teacherName)
+	if err != nil {
+		return false, "Database error."
+	}
+	institute, _ := c.getTeacherInstitute(cls.CreatedBy)
+	tx, err := c.db.Begin()
+	if err != nil {
+		return false, "Failed to link teacher."
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(
+		"INSERT IGNORE INTO teachers (username, institute) VALUES (?, ?)", teacherName, institute); err != nil {
+		return false, "Failed to register teacher."
+	}
+	// Assigning the full teacher role upgrades an existing Assistance
+	// assignment for the same class.
+	if _, err := tx.Exec(
+		"DELETE FROM class_assistants WHERE class_id = ? AND username = ?", classID, teacherName); err != nil {
+		return false, "Failed to update the class role."
+	}
+	res, err := tx.Exec(
+		"INSERT IGNORE INTO class_teachers (class_id, username) VALUES (?, ?)", classID, teacherName)
+	if err != nil {
+		return false, "Failed to link teacher."
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return false, teacherName + " is already linked to this class."
+	}
+	if err := tx.Commit(); err != nil {
+		return false, "Failed to link teacher."
+	}
+	if !wasRegistered {
+		return true, "Teacher registered and linked."
+	}
+	return true, "Teacher linked."
+}
+
+func (c *controller) removeClassTeacher(classID int, teacherName string) (bool, string) {
+	res, err := c.db.Exec(
+		"DELETE FROM class_teachers WHERE class_id = ? AND username = ?", classID, teacherName)
+	if err != nil {
+		return false, "Failed to unlink teacher."
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return false, teacherName + " is not linked to this class."
+	}
+	return true, "Teacher unlinked."
+}
+
+func (c *controller) getClassAssistants(classID int) ([]string, error) {
+	rows, err := c.db.Query(
+		"SELECT username FROM class_assistants WHERE class_id = ? ORDER BY username", classID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		result = append(result, name)
+	}
+	return result, rows.Err()
+}
+
+func (c *controller) addClassAssistant(classID int, playerName string) (bool, string) {
+	playerName = strings.TrimSpace(playerName)
+	if playerName == "" || len(playerName) > 50 {
+		return false, "Assistance name must be 1-50 characters."
+	}
+	cls, err := c.getClassByID(classID)
+	if err != nil || cls == nil {
+		return false, "Class not found."
+	}
+	if cls.CreatedBy == playerName || c.isLinkedTeacherInClass(classID, playerName) {
+		return false, playerName + " is already a teacher for this class."
+	}
+	if c.isStudentInClass(classID, playerName) {
+		return false, playerName + " is currently a student in this class."
+	}
+	res, err := c.db.Exec(
+		"INSERT IGNORE INTO class_assistants (class_id, username) VALUES (?, ?)", classID, playerName)
+	if err != nil {
+		return false, "Failed to add Assistance."
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return false, playerName + " is already an Assistance for this class."
+	}
+	return true, "Assistance added."
+}
+
+func (c *controller) removeClassAssistant(classID int, playerName string) (bool, string) {
+	res, err := c.db.Exec(
+		"DELETE FROM class_assistants WHERE class_id = ? AND username = ?", classID, playerName)
+	if err != nil {
+		return false, "Failed to remove Assistance."
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return false, playerName + " is not an Assistance for this class."
+	}
+	return true, "Assistance removed."
 }
 
 func (c *controller) getAllClasses() ([]classData, error) {
@@ -358,6 +554,13 @@ func (c *controller) getStudentClass(studentName string) (*classData, error) {
 func (c *controller) addStudent(classID int, studentName string) (bool, string) {
 	if studentName == "" {
 		return false, "Student name is empty."
+	}
+	cls, err := c.getClassByID(classID)
+	if err != nil || cls == nil {
+		return false, "Class not found."
+	}
+	if cls.CreatedBy == studentName || c.isLinkedTeacherInClass(classID, studentName) || c.isAssistantInClass(classID, studentName) {
+		return false, studentName + " is already staff for this class."
 	}
 
 	existing, err := c.getStudentClass(studentName)

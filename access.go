@@ -34,6 +34,9 @@ func (c *controller) isAllowedToHop(playerName, serverName string) bool {
 
 	// If instance is bound to a class, class students are allowed
 	if inst.ClassID != nil {
+		if c.canEditClassStudents(*inst.ClassID, playerName) {
+			return true
+		}
 		if c.isStudentInClass(*inst.ClassID, playerName) {
 			return true
 		}

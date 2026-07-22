@@ -22,6 +22,8 @@ func (c *controller) registerHandlers() {
 	proxy.RegisterOnPlayerReceiveFields("classrooms:world_controls", c.handleWorldControls)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:admin", c.handleAdminPanel)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:students", c.handleStudentEditor)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:assistants", c.handleAssistanceEditor)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:teachers", c.handleClassTeacherEditor)
 }
 
 func fieldMap(fields []mt.Field) map[string]string {
@@ -98,12 +100,15 @@ func (c *controller) hopClassToInstance(cc *proxy.ClientConn, inst *instanceData
 
 func (c *controller) handleMainDashboard(cc *proxy.ClientConn, fields []mt.Field) {
 	name := cc.Name()
-	if !c.isTeacher(name) {
+	if !c.hasClassPanelAccess(name) {
 		return
 	}
 	fm := fieldMap(fields)
 
 	if _, ok := fm["btn_create_class"]; ok {
+		if !c.isTeacher(name) {
+			return
+		}
 		className := strings.TrimSpace(fm["new_class_name"])
 		if ok, msg := c.createClass(name, className); !ok {
 			c.notify(cc, msg)
@@ -121,7 +126,9 @@ func (c *controller) handleMainDashboard(cc *proxy.ClientConn, fields []mt.Field
 		if strings.HasPrefix(k, "open_class_") {
 			idStr := strings.TrimPrefix(k, "open_class_")
 			id, _ := strconv.Atoi(idStr)
-			c.showClassView(cc, id)
+			if c.canViewClass(id, name) {
+				c.showClassView(cc, id)
+			}
 			return
 		}
 		if strings.HasPrefix(k, "del_class_") {
@@ -147,6 +154,12 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 		return
 	}
 	fm := fieldMap(fields)
+	canManage := c.canManageClass(classID, cc.Name())
+	canEditStudents := c.canEditClassStudents(classID, cc.Name())
+	if !canEditStudents {
+		c.showMainDashboard(cc)
+		return
+	}
 
 	if _, ok := fm["btn_back"]; ok {
 		if c.getActiveClassOrigin(cc.Name()) == viewOriginAdminClasses {
@@ -159,6 +172,33 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 
 	if _, ok := fm["btn_manage_students"]; ok {
 		c.showStudentEditor(cc, classID)
+		return
+	}
+	if _, ok := fm["btn_manage_assistance"]; ok {
+		if canManage {
+			c.showClassMemberEditor(cc, classID, true)
+		}
+		return
+	}
+	if _, ok := fm["btn_manage_teachers"]; ok {
+		if canManage {
+			c.showClassMemberEditor(cc, classID, false)
+		}
+		return
+	}
+
+	// Assistance may only edit students and use the per-student TP action.
+	if !canManage {
+		for k := range fm {
+			if strings.HasPrefix(k, "tp_to_") {
+				target := strings.TrimPrefix(k, "tp_to_")
+				if c.isStudentInClass(classID, target) {
+					c.teleportToPlayer(cc, target)
+				}
+				c.showClassView(cc, classID)
+				return
+			}
+		}
 		return
 	}
 
@@ -204,7 +244,9 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 		}
 		if strings.HasPrefix(k, "tp_to_") {
 			target := strings.TrimPrefix(k, "tp_to_")
-			c.teleportToPlayer(cc, target)
+			if c.isStudentInClass(classID, target) {
+				c.teleportToPlayer(cc, target)
+			}
 			c.showClassView(cc, classID)
 			return
 		}
@@ -221,6 +263,10 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 
 func (c *controller) handleTemplatePicker(cc *proxy.ClientConn, fields []mt.Field) {
 	classID, hasClass := c.getActiveClass(cc.Name())
+	if !c.isTeacher(cc.Name()) || (hasClass && !c.canManageClass(classID, cc.Name())) {
+		c.showMainDashboard(cc)
+		return
+	}
 	fm := fieldMap(fields)
 
 	if _, ok := fm["btn_back"]; ok {
@@ -295,6 +341,10 @@ func (c *controller) handleInstanceReady(cc *proxy.ClientConn, fields []mt.Field
 		c.showMainDashboard(cc)
 		return
 	}
+	if !c.canManageInstance(inst, cc.Name()) {
+		c.showMainDashboard(cc)
+		return
+	}
 
 	fm := fieldMap(fields)
 	if _, ok := fm["btn_ready_hop_me"]; ok {
@@ -339,6 +389,10 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 	}
 	origin := c.getActiveInstanceOrigin(cc.Name())
 	inst, _ := c.getInstanceByID(instID)
+	if !c.canManageInstance(inst, cc.Name()) {
+		c.showMainDashboard(cc)
+		return
+	}
 	fm := fieldMap(fields)
 
 	if _, ok := fm["btn_back"]; ok {
@@ -454,6 +508,10 @@ func (c *controller) handleInstanceSettings(cc *proxy.ClientConn, fields []mt.Fi
 		c.showMainDashboard(cc)
 		return
 	}
+	if !c.canManageInstance(inst, cc.Name()) {
+		c.showMainDashboard(cc)
+		return
+	}
 	fm := fieldMap(fields)
 
 	settingChanged := false
@@ -548,6 +606,12 @@ func (c *controller) handleInstanceSettings(cc *proxy.ClientConn, fields []mt.Fi
 }
 
 func (c *controller) handleWorldControls(cc *proxy.ClientConn, fields []mt.Field) {
+	instID, hasInstance := c.getActiveInstance(cc.Name())
+	inst, _ := c.getInstanceByID(instID)
+	if !hasInstance || !c.canManageInstance(inst, cc.Name()) {
+		c.showMainDashboard(cc)
+		return
+	}
 	fm := fieldMap(fields)
 	if _, ok := fm["btn_back"]; ok {
 		if instID, ok := c.getActiveInstance(cc.Name()); ok {
@@ -605,6 +669,10 @@ func (c *controller) handleInstanceRestart(cc *proxy.ClientConn, fields []mt.Fie
 	}
 	inst, _ := c.getInstanceByID(instID)
 	if inst == nil {
+		c.showMainDashboard(cc)
+		return
+	}
+	if !c.canManageInstance(inst, cc.Name()) {
 		c.showMainDashboard(cc)
 		return
 	}
@@ -748,6 +816,10 @@ func (c *controller) handleStudentEditor(cc *proxy.ClientConn, fields []mt.Field
 		c.showMainDashboard(cc)
 		return
 	}
+	if !c.canEditClassStudents(classID, cc.Name()) {
+		c.showMainDashboard(cc)
+		return
+	}
 	fm := fieldMap(fields)
 
 	if _, ok := fm["btn_back"]; ok {
@@ -769,6 +841,76 @@ func (c *controller) handleStudentEditor(cc *proxy.ClientConn, fields []mt.Field
 			sName := strings.TrimPrefix(k, "rm_student_")
 			c.removeStudent(classID, sName)
 			c.showStudentEditor(cc, classID)
+			return
+		}
+	}
+}
+
+func (c *controller) handleAssistanceEditor(cc *proxy.ClientConn, fields []mt.Field) {
+	c.handleClassMemberEditor(cc, fields, true)
+}
+
+func (c *controller) handleClassTeacherEditor(cc *proxy.ClientConn, fields []mt.Field) {
+	c.handleClassMemberEditor(cc, fields, false)
+}
+
+func (c *controller) handleClassMemberEditor(cc *proxy.ClientConn, fields []mt.Field, assistance bool) {
+	classID, ok := c.getActiveClass(cc.Name())
+	if !ok || !c.canManageClass(classID, cc.Name()) {
+		c.showMainDashboard(cc)
+		return
+	}
+	fm := fieldMap(fields)
+	if _, ok := fm["btn_back"]; ok {
+		c.showClassViewWithOrigin(cc, classID, c.getActiveClassOrigin(cc.Name()))
+		return
+	}
+
+	if assistance {
+		if _, ok := fm["btn_add_assistance"]; ok {
+			name := strings.TrimSpace(fm["add_assistance_name"])
+			if ok, msg := c.addClassAssistant(classID, name); !ok {
+				c.notify(cc, msg)
+			}
+			if proxy.Find(name) != nil {
+				c.scheduleReapplyStates(name, 0)
+			}
+			c.showClassMemberEditor(cc, classID, true)
+			return
+		}
+		for k := range fm {
+			if strings.HasPrefix(k, "rm_assistance_") {
+				name := strings.TrimPrefix(k, "rm_assistance_")
+				c.removeClassAssistant(classID, name)
+				if proxy.Find(name) != nil {
+					c.scheduleReapplyStates(name, 0)
+				}
+				c.showClassMemberEditor(cc, classID, true)
+				return
+			}
+		}
+		return
+	}
+
+	if _, ok := fm["btn_add_teacher"]; ok {
+		name := strings.TrimSpace(fm["add_teacher_name"])
+		if ok, msg := c.addClassTeacher(classID, name); !ok {
+			c.notify(cc, msg)
+		}
+		if proxy.Find(name) != nil {
+			c.scheduleReapplyStates(name, 0)
+		}
+		c.showClassMemberEditor(cc, classID, false)
+		return
+	}
+	for k := range fm {
+		if strings.HasPrefix(k, "rm_teacher_") {
+			name := strings.TrimPrefix(k, "rm_teacher_")
+			c.removeClassTeacher(classID, name)
+			if proxy.Find(name) != nil {
+				c.scheduleReapplyStates(name, 0)
+			}
+			c.showClassMemberEditor(cc, classID, false)
 			return
 		}
 	}

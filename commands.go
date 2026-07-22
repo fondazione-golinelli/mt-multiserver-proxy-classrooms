@@ -75,8 +75,8 @@ func (c *controller) registerCommands() {
 // ── Handlers ────────────────────────────────────────────────────────────────
 
 func (c *controller) handleClassesCmd(cc *proxy.ClientConn, args ...string) string {
-	if !c.isTeacher(cc.Name()) {
-		return "You are not registered as a teacher."
+	if !c.hasClassPanelAccess(cc.Name()) {
+		return "You do not have access to the class panel."
 	}
 	c.showMainDashboard(cc)
 	return ""

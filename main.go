@@ -421,6 +421,12 @@ func (c *controller) isTeacher(name string) bool {
 	return cc != nil && cc.HasPerms("server")
 }
 
+// hasClassPanelAccess includes full teachers, proxy administrators, and players
+// assigned as Assistance to at least one class.
+func (c *controller) hasClassPanelAccess(name string) bool {
+	return c.isTeacher(name) || c.isAssistant(name)
+}
+
 // isAdmin checks if a player has server-level proxy permissions.
 func (c *controller) isAdmin(name string) bool {
 	cc := proxy.Find(name)
