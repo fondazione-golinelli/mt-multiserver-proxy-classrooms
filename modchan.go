@@ -207,12 +207,15 @@ func (c *controller) reapplyTeacherContext(playerName string) {
 	}
 
 	action := "clear_teacher_defaults"
+	blockExchangeAccess := false
 	if inst != nil && inst.ClassID != nil && c.canEditClassStudents(*inst.ClassID, playerName) {
 		action = "set_teacher_defaults"
+		blockExchangeAccess = c.canManageClass(*inst.ClassID, playerName)
 	}
-	if !c.sendToPlayerServer(playerName, map[string]string{
-		"action": action,
-		"player": playerName,
+	if !c.sendToPlayerServer(playerName, map[string]interface{}{
+		"action":               action,
+		"player":               playerName,
+		"blockexchange_access": blockExchangeAccess,
 	}) {
 		log.Printf("[%s] failed to apply teacher context %s for %s on %s", pluginName, action, playerName, cc.ServerName())
 	}
