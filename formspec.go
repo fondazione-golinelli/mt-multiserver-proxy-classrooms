@@ -144,10 +144,7 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 
 	students, _ := c.getStudents(classID)
 	canManage := c.canManageClass(classID, cc.Name())
-	instances := []instanceData(nil)
-	if canManage {
-		instances, _ = c.getInstancesForClass(classID)
-	}
+	instances, _ := c.getInstancesForClass(classID)
 
 	var b strings.Builder
 	b.WriteString("formspec_version[6]")
@@ -215,13 +212,32 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 	}
 	b.WriteString("scroll_container_end[]")
 
-	// Right Column: full teachers manage instances; Assistance sees its scope.
+	// Right Column: full teachers manage instances; Assistance can join running
+	// worlds belonging to this class without receiving management controls.
 	if !canManage {
-		b.WriteString(coloredLbl(9.05, 1.25, muted, "ASSISTANCE ACCESS"))
+		running := make([]instanceData, 0, len(instances))
+		for _, inst := range instances {
+			if inst.Status == "running" {
+				running = append(running, inst)
+			}
+		}
+		b.WriteString(coloredLbl(9.05, 1.25, muted, "OPEN CLASS WORLDS"))
 		b.WriteString(box(8.95, 1.55, 6.85, 6.75, panel))
-		b.WriteString(coloredLbl(9.3, 2.0, light, "You can manage the student list"))
-		b.WriteString(coloredLbl(9.3, 2.5, light, "and teleport to online students."))
-		b.WriteString(coloredLbl(9.3, 3.2, muted, "World and instance controls are teacher-only."))
+		b.WriteString(coloredLbl(9.3, 1.95, muted, "Join a running world associated with this class."))
+		if len(running) == 0 {
+			b.WriteString(coloredLbl(9.3, 2.75, muted, "No class worlds are currently running."))
+		} else {
+			b.WriteString(scrollbarFor("scr_assistance_instances", 15.45, 2.45, 5.45, len(running), 0.95, 0.05))
+			b.WriteString("scroll_container[9.15,2.45;6.2,5.45;scr_assistance_instances;vertical;0.1]")
+			y := 0.05
+			for _, inst := range running {
+				b.WriteString(box(0, y, 6.05, 0.85, headerColor))
+				b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", y+0.32, fmtEsc(mcColorize(light, inst.Title()))))
+				b.WriteString(fmt.Sprintf("button[4.75,%g;1.0,0.55;join_inst_%s;Join]", y+0.14, fmtEsc(inst.ID)))
+				y += 0.95
+			}
+			b.WriteString("scroll_container_end[]")
+		}
 		cc.ShowFormspec("classrooms:class", b.String())
 		return
 	}

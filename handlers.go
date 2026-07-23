@@ -85,13 +85,24 @@ func (c *controller) hopClassToInstance(cc *proxy.ClientConn, inst *instanceData
 	if inst == nil || inst.ClassID == nil {
 		return
 	}
-	if includeTeacher && cc.ServerName() != inst.ProxyName {
-		_ = c.hopPlayer(cc, inst.ProxyName)
+	recipients := make(map[string]struct{})
+	if includeTeacher && cc != nil {
+		recipients[cc.Name()] = struct{}{}
 	}
 	students := c.getOnlineStudents(*inst.ClassID)
-	for _, s := range students {
-		if scc := proxy.Find(s); scc != nil && scc.ServerName() != inst.ProxyName {
-			_ = c.hopPlayer(scc, inst.ProxyName)
+	for _, name := range students {
+		recipients[name] = struct{}{}
+	}
+	staff, err := c.getClassStaff(*inst.ClassID)
+	if err != nil {
+		log.Printf("[%s] could not load class staff for class %d: %v", pluginName, *inst.ClassID, err)
+	}
+	for _, name := range staff {
+		recipients[name] = struct{}{}
+	}
+	for name := range recipients {
+		if player := proxy.Find(name); player != nil && player.ServerName() != inst.ProxyName {
+			_ = c.hopPlayer(player, inst.ProxyName)
 		}
 	}
 }
@@ -187,7 +198,8 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 		return
 	}
 
-	// Assistance may only edit students and use the per-student TP action.
+	// Assistance may edit students, TP to them, and join a running world that
+	// belongs to the active class.
 	if !canManage {
 		for k := range fm {
 			if strings.HasPrefix(k, "tp_to_") {
@@ -196,6 +208,20 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 					c.teleportToPlayer(cc, target)
 				}
 				c.showClassView(cc, classID)
+				return
+			}
+			if strings.HasPrefix(k, "join_inst_") {
+				instanceID := strings.TrimPrefix(k, "join_inst_")
+				inst, err := c.getInstanceByID(instanceID)
+				if err == nil && inst != nil && inst.Status == "running" && inst.ClassID != nil && *inst.ClassID == classID {
+					if cc.ServerName() != inst.ProxyName {
+						if err := c.hopPlayer(cc, inst.ProxyName); err != nil {
+							c.notify(cc, "Could not join the class world: "+err.Error())
+						}
+					}
+				} else {
+					c.notify(cc, "That class world is no longer available.")
+				}
 				return
 			}
 		}

@@ -54,3 +54,26 @@ func TestWorldWeatherPresetValue(t *testing.T) {
 		})
 	}
 }
+
+func TestShouldResumeWorldTime(t *testing.T) {
+	tests := []struct {
+		name               string
+		preset, weather    string
+		stopTime, expected bool
+	}{
+		{name: "resume button", expected: true},
+		{name: "rain is weather only", weather: "rain"},
+		{name: "sunny is weather only", weather: "sunny"},
+		{name: "day preset", preset: "day"},
+		{name: "stop button", preset: "stop", stopTime: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := shouldResumeWorldTime(tt.preset, tt.weather, tt.stopTime); got != tt.expected {
+				t.Fatalf("shouldResumeWorldTime(%q, %q, %v) = %v, want %v",
+					tt.preset, tt.weather, tt.stopTime, got, tt.expected)
+			}
+		})
+	}
+}

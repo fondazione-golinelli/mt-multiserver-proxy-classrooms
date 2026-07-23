@@ -33,6 +33,10 @@ func worldWeatherPresetValue(preset string) string {
 	}
 }
 
+func shouldResumeWorldTime(preset, weather string, stopTime bool) bool {
+	return !stopTime && preset == "" && weather == ""
+}
+
 func (c *controller) showWorldControls(cc *proxy.ClientConn, instanceID string) {
 	if cc == nil {
 		return
@@ -117,7 +121,9 @@ func (c *controller) applyWorldControls(cc *proxy.ClientConn, preset, weather st
 			"weather": worldWeatherPresetValue(weather),
 		})
 	}
-	if !stopTime && preset == "" {
+	// A completely empty action is the explicit Resume button. Weather-only
+	// actions must not also send the -1 sentinel as a time-of-day value.
+	if shouldResumeWorldTime(preset, weather, stopTime) {
 		c.sendToPlayerServer(player, map[string]interface{}{
 			"action":    "set_world_time",
 			"player":    player,

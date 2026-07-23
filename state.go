@@ -355,6 +355,32 @@ func (c *controller) getClassAssistants(classID int) ([]string, error) {
 	return result, rows.Err()
 }
 
+// getClassStaff returns the class owner, linked teachers, and Assistance.
+// UNION also prevents duplicate hops if legacy data contains overlapping roles.
+func (c *controller) getClassStaff(classID int) ([]string, error) {
+	rows, err := c.db.Query(`
+		SELECT created_by AS username FROM classes WHERE id = ?
+		UNION
+		SELECT username FROM class_teachers WHERE class_id = ?
+		UNION
+		SELECT username FROM class_assistants WHERE class_id = ?
+		ORDER BY username`, classID, classID, classID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		result = append(result, name)
+	}
+	return result, rows.Err()
+}
+
 func (c *controller) addClassAssistant(classID int, playerName string) (bool, string) {
 	playerName = strings.TrimSpace(playerName)
 	if playerName == "" || len(playerName) > 50 {
