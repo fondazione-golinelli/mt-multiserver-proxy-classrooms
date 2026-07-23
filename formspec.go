@@ -246,8 +246,8 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 	b.WriteString(box(8.95, 1.55, 6.85, 6.75, panel))
 	b.WriteString(btn(9.15, 1.75, 6.35, 0.55, "btn_create_instance", "+ Provision New Instance"))
 
-	b.WriteString(scrollbarFor("scr_instances", 15.45, 2.55, 5.5, len(instances), 0.95, 0.05))
-	b.WriteString("scroll_container[9.15,2.55;6.2,5.5;scr_instances;vertical;0.1]")
+	b.WriteString(scrollbarFor("scr_instances", 15.45, 2.55, 4.65, len(instances), 0.95, 0.05))
+	b.WriteString("scroll_container[9.15,2.55;6.2,4.65;scr_instances;vertical;0.1]")
 	iy := 0.05
 	for _, inst := range instances {
 		statusColor := muted
@@ -268,6 +268,7 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 		iy += 0.95
 	}
 	b.WriteString("scroll_container_end[]")
+	b.WriteString(btn(9.15, 7.55, 6.35, 0.55, "btn_return_hub", "Return to HUB"))
 
 	cc.ShowFormspec("classrooms:class", b.String())
 }

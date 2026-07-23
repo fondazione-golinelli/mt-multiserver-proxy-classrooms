@@ -24,6 +24,7 @@ func (c *controller) registerHandlers() {
 	proxy.RegisterOnPlayerReceiveFields("classrooms:students", c.handleStudentEditor)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:assistants", c.handleAssistanceEditor)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:teachers", c.handleClassTeacherEditor)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:portal_worlds", c.handlePortalWorlds)
 }
 
 func fieldMap(fields []mt.Field) map[string]string {
@@ -230,6 +231,12 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 
 	if _, ok := fm["btn_create_instance"]; ok {
 		c.showTemplatePicker(cc, &classID)
+		return
+	}
+	if _, ok := fm["btn_return_hub"]; ok {
+		if result := c.handleLobbyCmd(cc); result != "" {
+			c.notify(cc, result)
+		}
 		return
 	}
 

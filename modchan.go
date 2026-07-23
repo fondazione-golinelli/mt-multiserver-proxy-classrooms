@@ -16,18 +16,38 @@ func (c *controller) registerModChannel() {
 		if channel != modChannel {
 			return false
 		}
-		c.handleBridgeMessage(cc, msg)
+		c.handleBridgeMessage(cc, sender, msg)
 		// Intercept internal classrooms messages
 		return true
 	})
 }
 
-func (c *controller) handleBridgeMessage(cc *proxy.ClientConn, msg string) {
+func (c *controller) handleBridgeMessage(cc *proxy.ClientConn, sender, msg string) {
 	var data map[string]interface{}
 	if err := json.Unmarshal([]byte(msg), &data); err != nil {
 		return
 	}
 	action, _ := data["action"].(string)
+	if action == "open_portal_worlds" {
+		player, _ := data["player"].(string)
+		if sender != "" || player != cc.Name() || cc.ServerName() != c.cfg.LobbyServer {
+			return
+		}
+		c.showPortalWorlds(cc)
+		return
+	}
+	if action == "return_hub" {
+		player, _ := data["player"].(string)
+		if sender != "" || player != cc.Name() || !c.isCurrentServerClassInstance(cc) {
+			return
+		}
+		if err := c.hopPlayer(cc, c.cfg.LobbyServer); err != nil {
+			cc.SendChatMsg("[Classrooms] Failed to return to the HUB: " + err.Error())
+			return
+		}
+		c.clearPortalVisitor(player)
+		return
+	}
 	if action == "open_classes" {
 		player, _ := data["player"].(string)
 		if player != cc.Name() || !c.hasClassPanelAccess(player) {
@@ -114,6 +134,7 @@ func (c *controller) registerJoinLeave() {
 		name := cc.Name()
 		c.clearActiveClass(name)
 		c.clearActiveInstance(name)
+		c.clearPortalVisitor(name)
 
 		c.mu.Lock()
 		delete(c.runtime.watchingPlayers, name)
@@ -129,6 +150,7 @@ func (c *controller) registerJoinLeave() {
 
 func (c *controller) reapplyStates(playerName string) {
 	c.reapplyTeacherContext(playerName)
+	c.reapplyPortalVisitorContext(playerName)
 
 	if c.isFrozen(playerName) {
 		c.sendToPlayerServer(playerName, map[string]string{
