@@ -4,7 +4,7 @@ go 1.21.0
 
 require (
 	github.com/HimbeerserverDE/mt v0.0.0-20260501223507-c73641265239
-	github.com/HimbeerserverDE/mt-multiserver-proxy v0.0.0-20260623084742-6712ee5b7e00
+	github.com/HimbeerserverDE/mt-multiserver-proxy v0.0.0-20260724073225-007642ccbe8d
 	github.com/go-sql-driver/mysql v1.9.3
 )
 
