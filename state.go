@@ -577,7 +577,7 @@ func (c *controller) getStudentClass(studentName string) (*classData, error) {
 	return &cd, nil
 }
 
-func (c *controller) addStudent(classID int, studentName string) (bool, string) {
+func (c *controller) validateStudentAssignment(classID int, studentName string) (bool, string) {
 	if studentName == "" {
 		return false, "Student name is empty."
 	}
@@ -600,7 +600,15 @@ func (c *controller) addStudent(classID int, studentName string) (bool, string) 
 		return false, studentName + " is already assigned to class " + existing.Name + "."
 	}
 
-	_, err = c.db.Exec(
+	return true, ""
+}
+
+func (c *controller) addStudent(classID int, studentName string) (bool, string) {
+	if ok, msg := c.validateStudentAssignment(classID, studentName); !ok {
+		return false, msg
+	}
+
+	_, err := c.db.Exec(
 		"INSERT INTO class_students (class_id, username) VALUES (?, ?)",
 		classID, studentName)
 	if err != nil {

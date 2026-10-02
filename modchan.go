@@ -210,7 +210,7 @@ func (c *controller) reapplyTeacherContext(playerName string) {
 	blockExchangeAccess := false
 	if inst != nil && inst.ClassID != nil && c.canEditClassStudents(*inst.ClassID, playerName) {
 		action = "set_teacher_defaults"
-		blockExchangeAccess = c.canManageClass(*inst.ClassID, playerName)
+		blockExchangeAccess = true
 	}
 	if !c.sendToPlayerServer(playerName, map[string]interface{}{
 		"action":               action,

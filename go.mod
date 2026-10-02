@@ -10,7 +10,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/HimbeerserverDE/srp v0.0.0 // indirect
+	github.com/HimbeerserverDE/srp v0.0.0
 	github.com/klauspost/compress v1.19.2 // indirect
 	github.com/lib/pq v1.12.3 // indirect
 	github.com/mattn/go-sqlite3 v1.14.50 // indirect

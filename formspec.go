@@ -779,8 +779,21 @@ func (c *controller) showStudentEditor(cc *proxy.ClientConn, classID int) {
 	b.WriteString("field[0.55,1.28;5.3,0.5;add_student_name;;]")
 	b.WriteString(btn(6.05, 1.27, 1.2, 0.52, "btn_add_student", "Add"))
 
-	b.WriteString(scrollbarFor("scr_edit_students", 7.35, 2.1, 6.1, len(students), 0.75, 0.05))
-	b.WriteString("scroll_container[0.35,2.1;6.9,6.1;scr_edit_students;vertical;0.1]")
+	listY, listHeight := 2.1, 6.1
+	if c.canManageClass(classID, cc.Name()) {
+		b.WriteString(box(0.25, 2.0, 7.5, 2.65, panel))
+		b.WriteString(coloredLbl(0.55, 2.25, light, "Create account and add to class"))
+		b.WriteString("field[0.55,2.85;4.3,0.5;new_student_name;Username;]")
+		b.WriteString("pwdfield[0.55,3.85;3.25,0.5;new_student_password;Password (min. 8 chars)]")
+		b.WriteString("pwdfield[4.1,3.85;3.1,0.5;new_student_confirm;Confirm password]")
+		b.WriteString(btn(5.05, 2.83, 2.15, 0.52, "btn_create_student", "Create account"))
+		for _, field := range []string{"new_student_name", "new_student_password", "new_student_confirm"} {
+			b.WriteString("field_close_on_enter[" + field + ";false]")
+		}
+		listY, listHeight = 4.9, 3.3
+	}
+	b.WriteString(scrollbarFor("scr_edit_students", 7.35, listY, listHeight, len(students), 0.75, 0.05))
+	b.WriteString(fmt.Sprintf("scroll_container[0.35,%g;6.9,%g;scr_edit_students;vertical;0.1]", listY, listHeight))
 	y := 0.05
 	for _, s := range students {
 		b.WriteString(box(0, y, 6.75, 0.65, panel))

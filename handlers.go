@@ -860,6 +860,12 @@ func (c *controller) handleStudentEditor(cc *proxy.ClientConn, fields []mt.Field
 		return
 	}
 
+	if _, ok := fm["btn_create_student"]; ok {
+		c.notify(cc, c.createStudentAccount(classID, cc.Name(), strings.TrimSpace(fm["new_student_name"]), fm["new_student_password"], fm["new_student_confirm"]))
+		c.showStudentEditor(cc, classID)
+		return
+	}
+
 	if _, ok := fm["btn_add_student"]; ok {
 		sName := strings.TrimSpace(fm["add_student_name"])
 		if ok, msg := c.addStudent(classID, sName); !ok {
