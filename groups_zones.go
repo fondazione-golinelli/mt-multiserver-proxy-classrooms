@@ -415,8 +415,9 @@ func (c *controller) zonesMessage(inst *instanceData) (map[string]interface{}, e
 			entry["color"] = g.Color
 			entry["allowed"] = append([]string{}, g.Members...)
 		}
-		if _, y, _, _, ok := z.teleportPoint(); ok {
+		if x, y, zz, yaw, ok := z.teleportPoint(); ok {
 			entry["ref_y"] = y
+			entry["tp"] = map[string]float64{"x": x, "y": y, "z": zz, "yaw": yaw}
 		}
 		if m := missionsByZone[z.ID]; m != nil {
 			// Group zones: the group plays the mission; otherwise the class.
