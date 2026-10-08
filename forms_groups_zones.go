@@ -502,6 +502,8 @@ func (c *controller) showWorldTools(cc *proxy.ClientConn) {
 	var b strings.Builder
 	fsOpen(&b, 11, 11)
 	fsHeader(&b, 11, "World Tools", inst.Title(), false, true)
+	b.WriteString(styledBtn(5.75, 0.2, 1.5, 0.6, "wt_map", "Map", colorPrimary))
+	b.WriteString(tooltip("wt_map", "World map: zones, waypoints and teleport points for students"))
 	if inst.ClassID != nil {
 		b.WriteString(styledBtn(7.4, 0.2, 2.55, 0.6, "wt_groups", "Edit groups", colorButton))
 		b.WriteString(tooltip("wt_groups", "Create groups and choose who is in each one"))
@@ -631,6 +633,10 @@ func (c *controller) handleWorldTools(cc *proxy.ClientConn, fields []mt.Field) {
 		}
 	}
 
+	if _, ok := fm["wt_map"]; ok {
+		c.sendToPlayerServer(cc.Name(), map[string]string{"action": "open_map", "player": cc.Name()})
+		return
+	}
 	if _, ok := fm["wt_groups"]; ok && inst.ClassID != nil {
 		c.setActiveClassWithOrigin(cc.Name(), *inst.ClassID, viewOriginWorldTools)
 		c.showGroupsEditor(cc, *inst.ClassID)
