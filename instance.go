@@ -57,6 +57,11 @@ func (c *controller) provisionInstance(classID *int, createdBy, templateName, di
 		_ = c.deleteServer(context.Background(), appSrv.ID)
 		return nil, fmt.Errorf("failed to save instance record: %w", err)
 	}
+	// Persist the classroom-safe defaults the server was created with, so the
+	// settings dashboard and later restarts reflect what is actually running.
+	if err := c.saveInstanceSettings(defaultInstanceSettings(inst.ID)); err != nil {
+		log.Printf("[%s] failed to save default settings for instance %s: %v", pluginName, inst.ID, err)
+	}
 
 	// 2. Wait for initial install
 	appSrv, err = c.waitForInstall(ctx, appSrv.ID, "", "initial install")

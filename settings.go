@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"strings"
 
@@ -21,8 +22,28 @@ type instanceSettings struct {
 	SpawnPitch         sql.NullFloat64
 }
 
+// defaultInstanceSettings is the classroom-safe baseline for new teacher
+// instances: no damage, PvP, or hunger, and only peaceful mobs spawn.
 func defaultInstanceSettings(instanceID string) instanceSettings {
-	return instanceSettings{InstanceID: instanceID}
+	return instanceSettings{
+		InstanceID:       instanceID,
+		MobsSpawn:        true,
+		OnlyPeacefulMobs: true,
+	}
+}
+
+// toPelicanEnvironment maps settings to the Luanti egg's CLASSROOMS_* startup
+// variables, so a freshly provisioned instance boots with them before the
+// bridge has written any pending settings.
+func (s instanceSettings) toPelicanEnvironment() map[string]string {
+	return map[string]string{
+		"CLASSROOMS_ENABLE_DAMAGE":       fmt.Sprintf("%t", s.EnableDamage),
+		"CLASSROOMS_ENABLE_PVP":          fmt.Sprintf("%t", s.EnablePVP),
+		"CLASSROOMS_ENABLE_HUNGER":       fmt.Sprintf("%t", s.EnableHunger),
+		"CLASSROOMS_MOBS_SPAWN":          fmt.Sprintf("%t", s.MobsSpawn),
+		"CLASSROOMS_ONLY_PEACEFUL_MOBS":  fmt.Sprintf("%t", s.OnlyPeacefulMobs),
+		"CLASSROOMS_EXPLOSIONS_GRIEFING": fmt.Sprintf("%t", s.ExplosionsGriefing),
+	}
 }
 
 func (s instanceSettings) spawnString() string {

@@ -53,7 +53,7 @@ func (c *controller) handleBridgeMessage(cc *proxy.ClientConn, sender, msg strin
 		if player != cc.Name() || !c.hasClassPanelAccess(player) {
 			return
 		}
-		c.showMainDashboard(cc)
+		c.showPanelHome(cc)
 		return
 	}
 	if action != "spawnpoint_captured" {
@@ -109,7 +109,8 @@ func (c *controller) handleBridgeMessage(cc *proxy.ClientConn, sender, msg strin
 		teacher = cc
 	}
 	if teacher != nil {
-		teacher.SendChatMsg("[Classrooms] Spawnpoint saved. Restart the instance to apply it as startup spawn.")
+		c.setRestartPending(capture.InstanceID, true)
+		teacher.SendChatMsg("[Classrooms] Arrival point saved. Restart the world to apply it.")
 		c.showInstanceSettings(teacher, capture.InstanceID)
 	}
 }

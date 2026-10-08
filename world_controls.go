@@ -43,41 +43,53 @@ func (c *controller) showWorldControls(cc *proxy.ClientConn, instanceID string) 
 	}
 	if instanceID != "" {
 		c.setActiveInstanceWithOrigin(cc.Name(), instanceID, c.getActiveInstanceOrigin(cc.Name()))
+	} else {
+		instanceID, _ = c.getActiveInstance(cc.Name())
+	}
+	inst, err := c.getInstanceByID(instanceID)
+	if err != nil || inst == nil {
+		c.showMainDashboard(cc)
+		return
 	}
 	stopped := c.isInstanceTimeStopped(instanceID)
 
 	var b strings.Builder
-	b.WriteString("formspec_version[6]")
-	b.WriteString("size[10,8.4]")
-	b.WriteString(fmt.Sprintf("bgcolor[%s;true]", headerColor))
+	instanceFrame(&b, inst, instTabWorld)
 
-	b.WriteString(box(0, 0, 10, 0.95, panel))
-	b.WriteString(btn(0.2, 0.18, 1.25, 0.52, "btn_back", "Back"))
-	b.WriteString(coloredLbl(1.75, 0.42, light, "World Controls"))
-	b.WriteString(box(0, 0.95, 10, 0.04, accent))
-
-	b.WriteString(box(0.4, 1.25, 9.2, 2.4, panel))
-	b.WriteString(coloredLbl(0.65, 1.6, muted, "Time"))
-	b.WriteString(btn(0.7, 1.95, 2.2, 0.7, "btn_world_day", "Day"))
-	b.WriteString(btn(3.2, 1.95, 2.2, 0.7, "btn_world_evening", "Evening"))
-	b.WriteString(btn(5.7, 1.95, 2.2, 0.7, "btn_world_night", "Night"))
-	if stopped {
-		b.WriteString(btn(8.2, 1.95, 1.45, 0.7, "btn_world_resume_time", "Resume"))
-	} else {
-		b.WriteString(btn(8.2, 1.95, 1.45, 0.7, "btn_world_stop_time", "Stop"))
+	if cc.ServerName() != inst.ProxyName {
+		b.WriteString(box(0.3, 2.15, 10.4, 3.0, colorCard))
+		b.WriteString(fmt.Sprintf("image[0.6,2.5;0.55,0.55;%s]", iconWarning))
+		b.WriteString(coloredLbl(1.4, 2.8, light, "Time and weather are changed from inside the world."))
+		if inst.Status == "running" {
+			b.WriteString(hint(1.4, 3.3, "Join it, then open this tab again."))
+			b.WriteString(styledBtn(1.4, 3.9, 3.5, 0.75, "btn_hop_me", "Go there", colorPrimary))
+		} else {
+			b.WriteString(hint(1.4, 3.3, "The world is off: start it from the Overview tab."))
+		}
+		cc.ShowFormspec("classrooms:world_controls", b.String())
+		return
 	}
 
-	b.WriteString(box(0.4, 3.95, 9.2, 2.4, panel))
-	b.WriteString(coloredLbl(0.65, 4.3, muted, "Weather"))
-	b.WriteString(btn(0.7, 4.65, 2.2, 0.7, "btn_world_sunny", "Sunny"))
-	b.WriteString(btn(3.2, 4.65, 2.2, 0.7, "btn_world_rain", "Rain"))
-
-	b.WriteString(box(0.4, 6.7, 9.2, 0.95, panel))
+	b.WriteString(box(0.3, 2.15, 10.4, 3.2, colorCard))
+	b.WriteString(sectionTitle(0.55, 2.45, "Time of day"))
+	b.WriteString(styledBtn(0.55, 2.85, 3.2, 1.1, "btn_world_day", "Day", "#b8892c"))
+	b.WriteString(styledBtn(3.9, 2.85, 3.2, 1.1, "btn_world_evening", "Sunset", "#a3502c"))
+	b.WriteString(styledBtn(7.25, 2.85, 3.2, 1.1, "btn_world_night", "Night", "#23325e"))
 	if stopped {
-		b.WriteString(coloredLbl(0.65, 7.08, muted, "Time is currently stopped. Use Resume to restart time flow."))
+		b.WriteString(fmt.Sprintf("image[0.55,4.3;0.45,0.45;%s]", iconWarning))
+		b.WriteString(coloredLbl(1.15, 4.53, warning, "Time is paused."))
+		b.WriteString(styledBtn(7.25, 4.2, 3.2, 0.75, "btn_world_resume_time", "Let time flow", colorActive))
 	} else {
-		b.WriteString(coloredLbl(0.65, 7.08, muted, "The world controls apply to the current instance server."))
+		b.WriteString(hint(0.55, 4.53, "Pause time to keep the light as it is."))
+		b.WriteString(btn(7.25, 4.2, 3.2, 0.75, "btn_world_stop_time", "Pause time"))
 	}
+
+	b.WriteString(box(0.3, 5.55, 10.4, 2.2, colorCard))
+	b.WriteString(sectionTitle(0.55, 5.85, "Weather"))
+	b.WriteString(styledBtn(0.55, 6.25, 4.9, 1.1, "btn_world_sunny", "Clear sky", "#b8892c"))
+	b.WriteString(styledBtn(5.55, 6.25, 4.9, 1.1, "btn_world_rain", "Rain", "#3a5f8f"))
+
+	b.WriteString(hint(0.55, 8.2, "Changes apply to everyone in this world right away."))
 
 	cc.ShowFormspec("classrooms:world_controls", b.String())
 }

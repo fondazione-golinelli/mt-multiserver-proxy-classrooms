@@ -50,6 +50,59 @@ func cleanInstanceDisplayName(name string) string {
 	return name
 }
 
+func hasPrefixKey(fm map[string]string, prefix string) bool {
+	for k := range fm {
+		if strings.HasPrefix(k, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// handleInstanceTabs switches between the Overview, Rules and Time & weather
+// tabs of a world. It returns true when a tab button was pressed.
+func (c *controller) handleInstanceTabs(cc *proxy.ClientConn, fm map[string]string, inst *instanceData) bool {
+	if inst == nil {
+		return false
+	}
+	if _, ok := fm[instTabOverview]; ok {
+		c.showInstanceViewWithOrigin(cc, inst.ID, c.getActiveInstanceOrigin(cc.Name()))
+		return true
+	}
+	if _, ok := fm[instTabRules]; ok {
+		c.showInstanceSettings(cc, inst.ID)
+		return true
+	}
+	if _, ok := fm[instTabWorld]; ok {
+		c.showWorldControls(cc, inst.ID)
+		return true
+	}
+	return false
+}
+
+// handlePeopleTabs switches between the Students, Assistance and Teachers
+// tabs of the people editor. It returns true when a tab button was pressed.
+func (c *controller) handlePeopleTabs(cc *proxy.ClientConn, fm map[string]string, classID int) bool {
+	if _, ok := fm[peopleTabStudents]; ok {
+		c.showStudentEditor(cc, classID)
+		return true
+	}
+	canManage := c.canManageClass(classID, cc.Name())
+	if _, ok := fm[peopleTabAssistance]; ok {
+		if canManage {
+			c.showClassMemberEditor(cc, classID, true)
+		}
+		return true
+	}
+	if _, ok := fm[peopleTabTeachers]; ok {
+		if canManage {
+			c.showClassMemberEditor(cc, classID, false)
+		}
+		return true
+	}
+	return false
+}
+
 func activeClassPtr(hasClass bool, classID int) *int {
 	if !hasClass {
 		return nil
@@ -116,6 +169,9 @@ func (c *controller) handleMainDashboard(cc *proxy.ClientConn, fields []mt.Field
 		return
 	}
 	fm := fieldMap(fields)
+	if !hasPrefixKey(fm, "del_class_") {
+		c.disarmDelete(name)
+	}
 
 	if _, ok := fm["btn_create_class"]; ok {
 		if !c.isTeacher(name) {
@@ -146,8 +202,10 @@ func (c *controller) handleMainDashboard(cc *proxy.ClientConn, fields []mt.Field
 		if strings.HasPrefix(k, "del_class_") {
 			idStr := strings.TrimPrefix(k, "del_class_")
 			id, _ := strconv.Atoi(idStr)
-			if ok, msg := c.deleteClass(name, id); !ok {
-				c.notify(cc, msg)
+			if c.armDelete(name, "class:"+idStr) {
+				if ok, msg := c.deleteClass(name, id); !ok {
+					c.notify(cc, msg)
+				}
 			}
 			c.showMainDashboard(cc)
 			return
@@ -182,9 +240,29 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 		return
 	}
 
+	if _, ok := fm["btn_people"]; ok {
+		c.showStudentEditor(cc, classID)
+		return
+	}
 	if _, ok := fm["btn_manage_students"]; ok {
 		c.showStudentEditor(cc, classID)
 		return
+	}
+	for k := range fm {
+		if strings.HasPrefix(k, "join_inst_") {
+			instanceID := strings.TrimPrefix(k, "join_inst_")
+			inst, err := c.getInstanceByID(instanceID)
+			if err == nil && inst != nil && inst.Status == "running" && inst.ClassID != nil && *inst.ClassID == classID {
+				if cc.ServerName() != inst.ProxyName {
+					if err := c.hopPlayer(cc, inst.ProxyName); err != nil {
+						c.notify(cc, "Could not join the class world: "+err.Error())
+					}
+				}
+			} else {
+				c.notify(cc, "That class world is no longer available.")
+			}
+			return
+		}
 	}
 	if _, ok := fm["btn_manage_assistance"]; ok {
 		if canManage {
@@ -209,20 +287,6 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 					c.teleportToPlayer(cc, target)
 				}
 				c.showClassView(cc, classID)
-				return
-			}
-			if strings.HasPrefix(k, "join_inst_") {
-				instanceID := strings.TrimPrefix(k, "join_inst_")
-				inst, err := c.getInstanceByID(instanceID)
-				if err == nil && inst != nil && inst.Status == "running" && inst.ClassID != nil && *inst.ClassID == classID {
-					if cc.ServerName() != inst.ProxyName {
-						if err := c.hopPlayer(cc, inst.ProxyName); err != nil {
-							c.notify(cc, "Could not join the class world: "+err.Error())
-						}
-					}
-				} else {
-					c.notify(cc, "That class world is no longer available.")
-				}
 				return
 			}
 		}
@@ -266,6 +330,30 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 	}
 
 	for k := range fm {
+		if strings.HasPrefix(k, "cur_rules_") || strings.HasPrefix(k, "cur_world_") {
+			instID := strings.TrimPrefix(strings.TrimPrefix(k, "cur_rules_"), "cur_world_")
+			inst, err := c.getInstanceByID(instID)
+			if err != nil || inst == nil || inst.ClassID == nil || *inst.ClassID != classID {
+				c.showClassView(cc, classID)
+				return
+			}
+			c.setActiveInstanceWithOrigin(cc.Name(), inst.ID, c.getActiveClassOrigin(cc.Name()))
+			if strings.HasPrefix(k, "cur_rules_") {
+				c.showInstanceSettings(cc, inst.ID)
+			} else {
+				c.showWorldControls(cc, inst.ID)
+			}
+			return
+		}
+		if strings.HasPrefix(k, "bring_inst_") {
+			inst, err := c.getInstanceByID(strings.TrimPrefix(k, "bring_inst_"))
+			if err == nil && inst != nil && inst.Status == "running" && inst.ClassID != nil && *inst.ClassID == classID {
+				c.hopClassToInstance(cc, inst, true)
+			} else {
+				c.notify(cc, "That class world is not running.")
+			}
+			return
+		}
 		if strings.HasPrefix(k, "open_inst_") {
 			instID := strings.TrimPrefix(k, "open_inst_")
 			if c.getActiveClassOrigin(cc.Name()) == viewOriginAdminClasses {
@@ -427,9 +515,15 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 		return
 	}
 	fm := fieldMap(fields)
+	if _, ok := fm["btn_inst_delete"]; !ok {
+		c.disarmDelete(cc.Name())
+	}
 
 	if _, ok := fm["btn_back"]; ok {
 		c.showParentForInstance(cc, inst)
+		return
+	}
+	if c.handleInstanceTabs(cc, fm, inst) {
 		return
 	}
 
@@ -475,6 +569,10 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 	}
 
 	if _, ok := fm["btn_inst_delete"]; ok && inst != nil {
+		if !c.armDelete(cc.Name(), "instance:"+inst.ID) {
+			c.showInstanceViewWithOrigin(cc, instID, origin)
+			return
+		}
 		c.notify(cc, "Deleting instance...")
 		go func() {
 			if err := c.deleteInstance(inst); err != nil {
@@ -547,36 +645,45 @@ func (c *controller) handleInstanceSettings(cc *proxy.ClientConn, fields []mt.Fi
 	}
 	fm := fieldMap(fields)
 
+	if c.handleInstanceTabs(cc, fm, inst) {
+		return
+	}
+
 	settingChanged := false
+	needsRestart := false
 	settings, err := c.getInstanceSettingsOrDefault(inst.ID)
 	if err != nil {
 		c.notify(cc, "Could not load settings: "+err.Error())
 		c.showInstanceViewWithOrigin(cc, inst.ID, c.getActiveInstanceOrigin(cc.Name()))
 		return
 	}
-	if v, ok := fm["setting_damage"]; ok {
+	if v, ok := fm["setting_damage"]; ok && boolField(v) != settings.EnableDamage {
 		settings.EnableDamage = boolField(v)
 		settingChanged = true
 	}
-	if v, ok := fm["setting_pvp"]; ok {
+	if v, ok := fm["setting_pvp"]; ok && boolField(v) != settings.EnablePVP {
 		settings.EnablePVP = boolField(v)
 		settingChanged = true
 	}
-	if v, ok := fm["setting_hunger"]; ok {
+	if v, ok := fm["setting_hunger"]; ok && boolField(v) != settings.EnableHunger {
 		settings.EnableHunger = boolField(v)
 		settingChanged = true
+		needsRestart = true
 	}
-	if v, ok := fm["setting_mobs"]; ok {
+	if v, ok := fm["setting_mobs"]; ok && boolField(v) != settings.MobsSpawn {
 		settings.MobsSpawn = boolField(v)
 		settingChanged = true
+		needsRestart = true
 	}
-	if v, ok := fm["setting_peaceful"]; ok {
+	if v, ok := fm["setting_peaceful"]; ok && boolField(v) != settings.OnlyPeacefulMobs {
 		settings.OnlyPeacefulMobs = boolField(v)
 		settingChanged = true
+		needsRestart = true
 	}
-	if v, ok := fm["setting_explosions"]; ok {
+	if v, ok := fm["setting_explosions"]; ok && boolField(v) != settings.ExplosionsGriefing {
 		settings.ExplosionsGriefing = boolField(v)
 		settingChanged = true
+		needsRestart = true
 	}
 
 	if _, ok := fm["btn_back"]; ok {
@@ -625,9 +732,26 @@ func (c *controller) handleInstanceSettings(cc *proxy.ClientConn, fields []mt.Fi
 		c.showInstanceSettings(cc, inst.ID)
 		return
 	}
+	if _, ok := fm["btn_reset_settings"]; ok {
+		safe := defaultInstanceSettings(inst.ID)
+		safe.StaticSpawnpoint, safe.SpawnYaw, safe.SpawnPitch = settings.StaticSpawnpoint, settings.SpawnYaw, settings.SpawnPitch
+		settings = safe
+		settingChanged = true
+		needsRestart = true
+	}
+	// Every change is saved and pushed at once: damage and PvP apply live,
+	// the rest is written as pending settings for the next restart.
 	if settingChanged {
 		if err := c.saveInstanceSettings(settings); err != nil {
 			c.notify(cc, "Could not save setting: "+err.Error())
+			c.showInstanceSettings(cc, inst.ID)
+			return
+		}
+		if !c.sendSettingsToInstance(inst, settings) {
+			needsRestart = true
+		}
+		if needsRestart {
+			c.setRestartPending(inst.ID, true)
 		}
 		c.showInstanceSettings(cc, inst.ID)
 		return
@@ -646,6 +770,15 @@ func (c *controller) handleWorldControls(cc *proxy.ClientConn, fields []mt.Field
 		return
 	}
 	fm := fieldMap(fields)
+	if c.handleInstanceTabs(cc, fm, inst) {
+		return
+	}
+	if _, ok := fm["btn_hop_me"]; ok && inst != nil {
+		if inst.Status == "running" && cc.ServerName() != inst.ProxyName {
+			_ = c.hopPlayer(cc, inst.ProxyName)
+		}
+		return
+	}
 	if _, ok := fm["btn_back"]; ok {
 		if instID, ok := c.getActiveInstance(cc.Name()); ok {
 			c.showInstanceViewWithOrigin(cc, instID, c.getActiveInstanceOrigin(cc.Name()))
@@ -734,6 +867,7 @@ func (c *controller) handleInstanceRestart(cc *proxy.ClientConn, fields []mt.Fie
 			if liveCC == nil {
 				return
 			}
+			c.setRestartPending(inst.ID, false)
 			c.notify(liveCC, "Restart complete. Returned "+strconv.Itoa(len(displaced))+" displaced players.")
 			updated, err := c.getInstanceByID(inst.ID)
 			if err == nil && updated != nil {
@@ -752,6 +886,9 @@ func (c *controller) handleAdminPanel(cc *proxy.ClientConn, fields []mt.Field) {
 		return
 	}
 	fm := fieldMap(fields)
+	if !hasPrefixKey(fm, "del_class_") {
+		c.disarmDelete(cc.Name())
+	}
 
 	if _, ok := fm["btn_back"]; ok {
 		return
@@ -816,8 +953,10 @@ func (c *controller) handleAdminPanel(cc *proxy.ClientConn, fields []mt.Field) {
 		if strings.HasPrefix(k, "del_class_") {
 			idStr := strings.TrimPrefix(k, "del_class_")
 			id, _ := strconv.Atoi(idStr)
-			if ok, msg := c.deleteClass(cc.Name(), id); !ok {
-				c.notify(cc, msg)
+			if c.armDelete(cc.Name(), "class:"+idStr) {
+				if ok, msg := c.deleteClass(cc.Name(), id); !ok {
+					c.notify(cc, msg)
+				}
 			}
 			c.showAdminPanelTab(cc, "classes")
 			return
@@ -857,6 +996,9 @@ func (c *controller) handleStudentEditor(cc *proxy.ClientConn, fields []mt.Field
 
 	if _, ok := fm["btn_back"]; ok {
 		c.showClassViewWithOrigin(cc, classID, c.getActiveClassOrigin(cc.Name()))
+		return
+	}
+	if c.handlePeopleTabs(cc, fm, classID) {
 		return
 	}
 
@@ -902,6 +1044,9 @@ func (c *controller) handleClassMemberEditor(cc *proxy.ClientConn, fields []mt.F
 	fm := fieldMap(fields)
 	if _, ok := fm["btn_back"]; ok {
 		c.showClassViewWithOrigin(cc, classID, c.getActiveClassOrigin(cc.Name()))
+		return
+	}
+	if c.handlePeopleTabs(cc, fm, classID) {
 		return
 	}
 

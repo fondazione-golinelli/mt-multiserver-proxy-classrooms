@@ -135,6 +135,8 @@ type runtimeState struct {
 	adminInstituteFilter map[string]string   // player -> current admin institute filter
 	adminTeacherFilter   map[string]string   // player -> current admin teacher filter
 	pendingOps           map[string]struct{} // player -> in-flight operation
+	confirmDelete        map[string]string   // player -> "class:<id>" / "instance:<id>" awaiting a second click
+	restartPending       map[string]bool     // instance ID -> saved settings need a restart to apply
 }
 
 func newRuntimeState() runtimeState {
@@ -152,6 +154,8 @@ func newRuntimeState() runtimeState {
 		adminInstituteFilter: make(map[string]string),
 		adminTeacherFilter:   make(map[string]string),
 		pendingOps:           make(map[string]struct{}),
+		confirmDelete:        make(map[string]string),
+		restartPending:       make(map[string]bool),
 	}
 }
 

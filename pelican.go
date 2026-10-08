@@ -135,6 +135,9 @@ func (c *controller) createServer(ctx context.Context, playerName, instanceID st
 		"SERVER_PORT":             fmt.Sprintf("%d", c.cfg.Instance.InternalPort),
 		"BIND_ADDR":               "0.0.0.0",
 	}
+	for key, value := range defaultInstanceSettings(instanceID).toPelicanEnvironment() {
+		env[key] = value
+	}
 
 	payload := createServerPayload{
 		ExternalID:    instanceID,

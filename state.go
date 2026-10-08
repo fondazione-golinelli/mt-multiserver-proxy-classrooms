@@ -1111,6 +1111,48 @@ func (c *controller) clearActiveInstance(player string) {
 	delete(c.runtime.adminTab, player)
 	delete(c.runtime.adminInstituteFilter, player)
 	delete(c.runtime.adminTeacherFilter, player)
+	delete(c.runtime.confirmDelete, player)
+}
+
+// armDelete records a first delete click. It returns true when the same
+// target was already armed, i.e. this click confirms the deletion.
+func (c *controller) armDelete(player, target string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.runtime.confirmDelete[player] == target {
+		delete(c.runtime.confirmDelete, player)
+		return true
+	}
+	c.runtime.confirmDelete[player] = target
+	return false
+}
+
+func (c *controller) isDeleteArmed(player, target string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.runtime.confirmDelete[player] == target
+}
+
+func (c *controller) disarmDelete(player string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.runtime.confirmDelete, player)
+}
+
+func (c *controller) setRestartPending(instanceID string, pending bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if pending {
+		c.runtime.restartPending[instanceID] = true
+	} else {
+		delete(c.runtime.restartPending, instanceID)
+	}
+}
+
+func (c *controller) isRestartPending(instanceID string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.runtime.restartPending[instanceID]
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
