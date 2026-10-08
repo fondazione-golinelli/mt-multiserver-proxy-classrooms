@@ -25,6 +25,8 @@ func (c *controller) registerHandlers() {
 	proxy.RegisterOnPlayerReceiveFields("classrooms:assistants", c.handleAssistanceEditor)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:teachers", c.handleClassTeacherEditor)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:portal_worlds", c.handlePortalWorlds)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:groups", c.handleGroupsEditor)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:world_tools", c.handleWorldTools)
 }
 
 func fieldMap(fields []mt.Field) map[string]string {
@@ -77,6 +79,7 @@ func (c *controller) handleInstanceTabs(cc *proxy.ClientConn, fm map[string]stri
 		c.showWorldControls(cc, inst.ID)
 		return true
 	}
+
 	return false
 }
 
@@ -88,6 +91,12 @@ func (c *controller) handlePeopleTabs(cc *proxy.ClientConn, fm map[string]string
 		return true
 	}
 	canManage := c.canManageClass(classID, cc.Name())
+	if _, ok := fm[peopleTabGroups]; ok {
+		if canManage {
+			c.showGroupsEditor(cc, classID)
+		}
+		return true
+	}
 	if _, ok := fm[peopleTabAssistance]; ok {
 		if canManage {
 			c.showClassMemberEditor(cc, classID, true)
@@ -228,6 +237,29 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 	canEditStudents := c.canEditClassStudents(classID, cc.Name())
 	if !canEditStudents {
 		c.showMainDashboard(cc)
+		return
+	}
+
+	// Student list filter and scroll position (sent with every submit). A
+	// changed filter is its own event: redraw and stop.
+	view := c.studentList(cc.Name(), classID)
+	c.mu.Lock()
+	if v, ok := scrollValue(fm["scr_students"]); ok {
+		view.Scroll["scr_students"] = v
+	}
+	filterChanged := false
+	if idx, err := strconv.Atoi(fm["cls_filter"]); err == nil {
+		groups, _ := c.getGroups(classID)
+		_, keys := filterOptions(groups, classViewFixedFilters)
+		if idx >= 1 && idx <= len(keys) && keys[idx-1] != view.ClassFilter {
+			view.ClassFilter = keys[idx-1]
+			view.Scroll["scr_students"] = 0
+			filterChanged = true
+		}
+	}
+	c.mu.Unlock()
+	if filterChanged {
+		c.showClassViewWithOrigin(cc, classID, c.getActiveClassOrigin(cc.Name()))
 		return
 	}
 

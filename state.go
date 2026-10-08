@@ -879,13 +879,18 @@ func (c *controller) watchTeacher(classID int, teacherName string) {
 }
 
 func (c *controller) gatherClass(classID int, teacherName string) {
+	c.gatherPlayers(c.getOnlineStudents(classID), teacherName)
+}
+
+// gatherPlayers brings the listed online players to the teacher, hopping them
+// to the teacher's server first when needed.
+func (c *controller) gatherPlayers(students []string, teacherName string) {
 	tcc := proxy.Find(teacherName)
 	if tcc == nil {
 		return
 	}
 	tServer := tcc.ServerName()
 
-	students := c.getOnlineStudents(classID)
 	onlineStudents := make([]string, 0)
 	needsHop := false
 
@@ -999,6 +1004,7 @@ const (
 	viewOriginTeacher        = "teacher"
 	viewOriginAdminClasses   = "admin_classes"
 	viewOriginAdminInstances = "admin_instances"
+	viewOriginWorldTools     = "world_tools"
 )
 
 func (c *controller) setActiveClass(player string, classID int) {
@@ -1112,6 +1118,9 @@ func (c *controller) clearActiveInstance(player string) {
 	delete(c.runtime.adminInstituteFilter, player)
 	delete(c.runtime.adminTeacherFilter, player)
 	delete(c.runtime.confirmDelete, player)
+	delete(c.runtime.zoneEdits, player)
+	delete(c.runtime.worldToolsGroup, player)
+	delete(c.runtime.studentLists, player)
 }
 
 // armDelete records a first delete click. It returns true when the same

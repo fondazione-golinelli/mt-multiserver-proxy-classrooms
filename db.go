@@ -109,6 +109,37 @@ func migrateDB(db *sql.DB) error {
 			spawn_pitch              DOUBLE DEFAULT NULL,
 			FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+		`CREATE TABLE IF NOT EXISTS class_groups (
+			id       INT AUTO_INCREMENT PRIMARY KEY,
+			class_id INT         NOT NULL,
+			name     VARCHAR(50) NOT NULL,
+			color    VARCHAR(9)  NOT NULL,
+			UNIQUE KEY uniq_class_group_name (class_id, name),
+			FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+		`CREATE TABLE IF NOT EXISTS class_group_members (
+			class_id INT         NOT NULL,
+			username VARCHAR(50) NOT NULL,
+			group_id INT         NOT NULL,
+			PRIMARY KEY (class_id, username),
+			FOREIGN KEY (group_id) REFERENCES class_groups(id) ON DELETE CASCADE,
+			FOREIGN KEY (class_id, username) REFERENCES class_students(class_id, username) ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+		`CREATE TABLE IF NOT EXISTS instance_zones (
+			id          INT AUTO_INCREMENT PRIMARY KEY,
+			instance_id VARCHAR(100) NOT NULL,
+			name        VARCHAR(50)  NOT NULL,
+			group_id    INT          DEFAULT NULL,
+			min_x       INT          NOT NULL,
+			min_z       INT          NOT NULL,
+			max_x       INT          NOT NULL,
+			max_z       INT          NOT NULL,
+			FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE,
+			FOREIGN KEY (group_id) REFERENCES class_groups(id) ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 	}
 
 	for _, stmt := range migrations {
@@ -132,6 +163,16 @@ func migrateDB(db *sql.DB) error {
 	if err := addUniqueIndexIfMissing(db, "class_students", "uniq_class_students_username",
 		"ALTER TABLE class_students ADD UNIQUE KEY uniq_class_students_username (username)"); err != nil {
 		return err
+	}
+	if err := addColumnIfMissing(db, "instance_zones", "open_access",
+		"ALTER TABLE instance_zones ADD COLUMN open_access TINYINT(1) NOT NULL DEFAULT 0 AFTER group_id"); err != nil {
+		return err
+	}
+	for _, col := range []string{"tp_x", "tp_y", "tp_z", "tp_yaw"} {
+		if err := addColumnIfMissing(db, "instance_zones", col,
+			"ALTER TABLE instance_zones ADD COLUMN "+col+" DOUBLE DEFAULT NULL"); err != nil {
+			return err
+		}
 	}
 	if err := addColumnIfMissing(db, "instance_settings", "enable_pvp",
 		"ALTER TABLE instance_settings ADD COLUMN enable_pvp TINYINT(1) NOT NULL DEFAULT 0 AFTER enable_damage"); err != nil {

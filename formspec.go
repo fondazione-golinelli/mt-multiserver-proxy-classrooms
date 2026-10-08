@@ -56,6 +56,8 @@ func plural(n int, one, many string) string {
 	return fmt.Sprintf("%d %s", n, many)
 }
 
+var classViewFixedFilters = [][2]string{{"all", "All students"}, {"online", "Online now"}, {"none", "Without group"}}
+
 // ── Panel entry point ──────────────────────────────────────────────────────
 
 // showPanelHome opens the class of the world the player is in, when that
@@ -224,16 +226,26 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 
 	b.WriteString(sectionTitle(0.45, listY, "Students"))
 	b.WriteString(styledBtn(5.55, listY-0.3, 3.0, 0.58, "btn_people", "Manage people", colorButton))
-	b.WriteString(tooltip("btn_people", "Add or remove students, create student accounts, and manage assistance/teachers"))
+	b.WriteString(tooltip("btn_people", "Add or remove students, create student accounts, and manage groups, assistance and teachers"))
+	groups, _ := c.getGroups(classID)
+	byStudent := groupByStudent(groups)
+	view := c.studentList(cc.Name(), classID)
+	filterLabels, filterKeys := filterOptions(groups, classViewFixedFilters)
+	b.WriteString(fmt.Sprintf("dropdown[2.1,%g;3.3,0.58;cls_filter;%s;%d;true]",
+		listY-0.3, dropdownItems(filterLabels), indexOf(filterKeys, view.ClassFilter)))
+	b.WriteString(tooltip("cls_filter", "Show only some students"))
+	shown := onlineFirst(filterStudents(students, byStudent, view.ClassFilter, ""))
 	listTop := listY + 0.4
 	listH := 9.25 - listTop
 	if len(students) == 0 {
 		b.WriteString(hint(0.6, listTop+0.4, "No students yet: use Manage people to add them."))
+	} else if len(shown) == 0 {
+		b.WriteString(hint(0.6, listTop+0.4, "No students match this filter."))
 	}
-	b.WriteString(scrollbarFor("scr_students", 8.45, listTop, listH, len(students), 0.7, 0.05))
+	b.WriteString(scrollbarAt("scr_students", 8.45, listTop, listH, len(shown), 0.7, 0.05, view.Scroll["scr_students"]))
 	b.WriteString(fmt.Sprintf("scroll_container[0.4,%g;8.0,%g;scr_students;vertical;0.1]", listTop, listH))
 	sy := 0.05
-	for _, s := range students {
+	for _, s := range shown {
 		isOnline := proxy.Find(s) != nil
 		b.WriteString(box(0, sy, 7.95, 0.62, colorRow))
 		dot := muted
@@ -242,6 +254,14 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 		}
 		b.WriteString(statusDot(0.2, sy+0.2, dot))
 		b.WriteString(fmt.Sprintf("label[0.6,%g;%s]", sy+0.31, fmtEsc(s)))
+		if g, ok := byStudent[s]; ok {
+			name := []rune(g.Name)
+			if len(name) > 14 {
+				name = append(name[:13], '…')
+			}
+			b.WriteString(box(3.9, sy+0.2, 0.22, 0.22, g.Color))
+			b.WriteString(fmt.Sprintf("label[4.25,%g;%s]", sy+0.31, fmtEsc(mcColorize(g.Color, string(name)))))
+		}
 		if isOnline {
 			b.WriteString(iconBtn(6.55, sy+0.06, 0.5, "tp_to_"+s, iconTeleport, "Teleport to "+s))
 			if canManage {
@@ -834,6 +854,11 @@ func adminScroll(name string, itemCount int) string {
 }
 
 func scrollbarFor(name string, x, y, h float64, itemCount int, rowStep, topPad float64) string {
+	return scrollbarAt(name, x, y, h, itemCount, rowStep, topPad, 0)
+}
+
+// scrollbarAt is scrollbarFor starting at a remembered position.
+func scrollbarAt(name string, x, y, h float64, itemCount int, rowStep, topPad float64, value int) string {
 	const (
 		factor = 0.1
 	)
@@ -845,7 +870,13 @@ func scrollbarFor(name string, x, y, h float64, itemCount int, rowStep, topPad f
 	if max < 1 {
 		max = 1
 	}
-	return fmt.Sprintf("scrollbaroptions[min=0;max=%d;smallstep=4;largestep=16;arrows=default]scrollbar[%g,%g;0.25,%g;vertical;%s;0]", max, x, y, h, name)
+	if value > max {
+		value = max
+	}
+	if value < 0 {
+		value = 0
+	}
+	return fmt.Sprintf("scrollbaroptions[min=0;max=%d;smallstep=4;largestep=16;arrows=default]scrollbar[%g,%g;0.25,%g;vertical;%s;%d]", max, x, y, h, name, value)
 }
 
 func (c *controller) writeAdminFilters(b *strings.Builder, institute, teacher string) {
@@ -900,13 +931,18 @@ const (
 )
 
 func (c *controller) peopleFrame(b *strings.Builder, cc *proxy.ClientConn, cls *classData, activeTab string) {
-	fsOpen(b, 9, 9.6)
-	fsHeader(b, 9, "People", cls.Name, true, true)
+	c.peopleFrameWidth(b, cc, cls, activeTab, 9)
+}
+
+func (c *controller) peopleFrameWidth(b *strings.Builder, cc *proxy.ClientConn, cls *classData, activeTab string, w float64) {
+	fsOpen(b, w, 9.6)
+	fsHeader(b, w, "People", cls.Name, true, true)
 	tabs := [][2]string{{peopleTabStudents, "Students"}}
 	if c.canManageClass(cls.ID, cc.Name()) {
-		tabs = append(tabs, [2]string{peopleTabAssistance, "Assistance"}, [2]string{peopleTabTeachers, "Teachers"})
+		tabs = append(tabs, [2]string{peopleTabGroups, "Groups"},
+			[2]string{peopleTabAssistance, "Assistance"}, [2]string{peopleTabTeachers, "Teachers"})
 	}
-	tabBar(b, 0.3, 1.2, 2.7, activeTab, tabs)
+	tabBar(b, 0.3, 1.2, 1.95, activeTab, tabs)
 }
 
 // personList draws a scrollable list of names with a remove button each.

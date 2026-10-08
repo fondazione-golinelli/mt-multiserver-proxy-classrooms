@@ -127,16 +127,19 @@ type runtimeState struct {
 	portalVisitors       map[string]string // player -> instance ID selected through the HUB portal
 	instanceTimeStopped  map[string]bool   // instance ID -> time is stopped
 	spawnCaptures        map[string]spawnCaptureRequest
-	activeClass          map[string]int      // player -> class ID they have open
-	activeClassOrigin    map[string]string   // player -> teacher/admin origin
-	activeInstance       map[string]string   // player -> instance ID they have open
-	activeInstanceOrigin map[string]string   // player -> teacher/admin origin
-	adminTab             map[string]string   // player -> current admin tab
-	adminInstituteFilter map[string]string   // player -> current admin institute filter
-	adminTeacherFilter   map[string]string   // player -> current admin teacher filter
-	pendingOps           map[string]struct{} // player -> in-flight operation
-	confirmDelete        map[string]string   // player -> "class:<id>" / "instance:<id>" awaiting a second click
-	restartPending       map[string]bool     // instance ID -> saved settings need a restart to apply
+	activeClass          map[string]int              // player -> class ID they have open
+	activeClassOrigin    map[string]string           // player -> teacher/admin origin
+	activeInstance       map[string]string           // player -> instance ID they have open
+	activeInstanceOrigin map[string]string           // player -> teacher/admin origin
+	adminTab             map[string]string           // player -> current admin tab
+	adminInstituteFilter map[string]string           // player -> current admin institute filter
+	adminTeacherFilter   map[string]string           // player -> current admin teacher filter
+	pendingOps           map[string]struct{}         // player -> in-flight operation
+	confirmDelete        map[string]string           // player -> "class:<id>" / "instance:<id>" awaiting a second click
+	restartPending       map[string]bool             // instance ID -> saved settings need a restart to apply
+	zoneEdits            map[string]zoneEdit         // teacher -> zone being drawn in-world
+	worldToolsGroup      map[string]int              // teacher -> selected group index for zone teleports
+	studentLists         map[string]*studentListView // teacher -> group editor search/filter/selection
 }
 
 func newRuntimeState() runtimeState {
@@ -156,6 +159,9 @@ func newRuntimeState() runtimeState {
 		pendingOps:           make(map[string]struct{}),
 		confirmDelete:        make(map[string]string),
 		restartPending:       make(map[string]bool),
+		zoneEdits:            make(map[string]zoneEdit),
+		worldToolsGroup:      make(map[string]int),
+		studentLists:         make(map[string]*studentListView),
 	}
 }
 

@@ -56,6 +56,22 @@ func (c *controller) handleBridgeMessage(cc *proxy.ClientConn, sender, msg strin
 		c.showPanelHome(cc)
 		return
 	}
+	if action == "open_world_tools" || action == "zone_edit_done" || action == "zone_edit_cancelled" {
+		player, _ := data["player"].(string)
+		if player != cc.Name() {
+			return
+		}
+		switch action {
+		case "open_world_tools":
+			c.showWorldTools(cc)
+		case "zone_edit_done":
+			c.handleZoneEditDone(cc, data)
+		case "zone_edit_cancelled":
+			c.takeZoneEdit(cc.Name())
+			c.showWorldTools(cc)
+		}
+		return
+	}
 	if action != "spawnpoint_captured" {
 		return
 	}
@@ -152,6 +168,7 @@ func (c *controller) registerJoinLeave() {
 func (c *controller) reapplyStates(playerName string) {
 	c.reapplyTeacherContext(playerName)
 	c.reapplyPortalVisitorContext(playerName)
+	c.reapplyZones(playerName)
 
 	if c.isFrozen(playerName) {
 		c.sendToPlayerServer(playerName, map[string]string{
@@ -192,9 +209,11 @@ func (c *controller) reapplyTeacherContext(playerName string) {
 	// them the teacher panel without changing gamemode, fly, fast, or any
 	// other server-local privilege.
 	if c.isAdmin(playerName) {
-		if !c.sendToPlayerServer(playerName, map[string]string{
-			"action": "set_teacher_access",
-			"player": playerName,
+		inst, _ := c.getInstanceByProxyName(cc.ServerName())
+		if !c.sendToPlayerServer(playerName, map[string]interface{}{
+			"action":             "set_teacher_access",
+			"player":             playerName,
+			"world_tools_access": inst != nil,
 		}) {
 			log.Printf("[%s] failed to apply admin teacher access for %s on %s", pluginName, playerName, cc.ServerName())
 		}
@@ -209,14 +228,17 @@ func (c *controller) reapplyTeacherContext(playerName string) {
 
 	action := "clear_teacher_defaults"
 	blockExchangeAccess := false
+	worldToolsAccess := false
 	if inst != nil && inst.ClassID != nil && c.canEditClassStudents(*inst.ClassID, playerName) {
 		action = "set_teacher_defaults"
 		blockExchangeAccess = true
+		worldToolsAccess = c.canManageInstance(inst, playerName)
 	}
 	if !c.sendToPlayerServer(playerName, map[string]interface{}{
 		"action":               action,
 		"player":               playerName,
 		"blockexchange_access": blockExchangeAccess,
+		"world_tools_access":   worldToolsAccess,
 	}) {
 		log.Printf("[%s] failed to apply teacher context %s for %s on %s", pluginName, action, playerName, cc.ServerName())
 	}
