@@ -27,6 +27,7 @@ func (c *controller) registerHandlers() {
 	proxy.RegisterOnPlayerReceiveFields("classrooms:portal_worlds", c.handlePortalWorlds)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:groups", c.handleGroupsEditor)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:world_tools", c.handleWorldTools)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:mission", c.handleMissionEditor)
 }
 
 func fieldMap(fields []mt.Field) map[string]string {

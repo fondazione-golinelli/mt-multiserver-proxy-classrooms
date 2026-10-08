@@ -1121,6 +1121,7 @@ func (c *controller) clearActiveInstance(player string) {
 	delete(c.runtime.zoneEdits, player)
 	delete(c.runtime.worldToolsGroup, player)
 	delete(c.runtime.studentLists, player)
+	delete(c.runtime.missionDrafts, player)
 }
 
 // armDelete records a first delete click. It returns true when the same

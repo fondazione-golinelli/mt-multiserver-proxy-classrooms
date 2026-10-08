@@ -56,6 +56,17 @@ func (c *controller) handleBridgeMessage(cc *proxy.ClientConn, sender, msg strin
 		c.showPanelHome(cc)
 		return
 	}
+	if action == "mission_progress" {
+		c.handleMissionProgress(data)
+		return
+	}
+	if action == "mission_catalog" {
+		player, _ := data["player"].(string)
+		if player == cc.Name() {
+			c.handleMissionCatalog(cc, data)
+		}
+		return
+	}
 	if action == "open_world_tools" || action == "zone_edit_done" || action == "zone_edit_cancelled" {
 		player, _ := data["player"].(string)
 		if player != cc.Name() {

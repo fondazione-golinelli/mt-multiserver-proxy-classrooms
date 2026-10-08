@@ -379,6 +379,7 @@ func (c *controller) zonesMessage(inst *instanceData) (map[string]interface{}, e
 		return nil, err
 	}
 	groups := map[int]classGroup{}
+	var classStudents []string
 	if inst.ClassID != nil {
 		list, err := c.getGroups(*inst.ClassID)
 		if err != nil {
@@ -387,6 +388,11 @@ func (c *controller) zonesMessage(inst *instanceData) (map[string]interface{}, e
 		for _, g := range list {
 			groups[g.ID] = g
 		}
+		classStudents, _ = c.getStudents(*inst.ClassID)
+	}
+	missionsByZone, err := c.getMissionsForWorld(inst.ID)
+	if err != nil {
+		return nil, err
 	}
 	payload := make([]map[string]interface{}, 0, len(zones))
 	for _, z := range zones {
@@ -408,6 +414,17 @@ func (c *controller) zonesMessage(inst *instanceData) (map[string]interface{}, e
 			entry["group"] = g.Name
 			entry["color"] = g.Color
 			entry["allowed"] = append([]string{}, g.Members...)
+		}
+		if _, y, _, _, ok := z.teleportPoint(); ok {
+			entry["ref_y"] = y
+		}
+		if m := missionsByZone[z.ID]; m != nil {
+			// Group zones: the group plays the mission; otherwise the class.
+			participants := classStudents
+			if g, ok := groups[int(z.GroupID.Int64)]; z.GroupID.Valid && ok && !z.Open {
+				participants = g.Members
+			}
+			entry["mission"] = missionPayload(m, participants)
 		}
 		payload = append(payload, entry)
 	}

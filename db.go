@@ -140,6 +140,18 @@ func migrateDB(db *sql.DB) error {
 			FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE,
 			FOREIGN KEY (group_id) REFERENCES class_groups(id) ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+		`CREATE TABLE IF NOT EXISTS zone_missions (
+			id           INT AUTO_INCREMENT PRIMARY KEY,
+			zone_id      INT          NOT NULL UNIQUE,
+			title        VARCHAR(80)  NOT NULL,
+			description  VARCHAR(255) NOT NULL DEFAULT '',
+			objectives   TEXT         NOT NULL,
+			tools        TEXT         NOT NULL,
+			created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			completed_at TIMESTAMP    NULL DEFAULT NULL,
+			FOREIGN KEY (zone_id) REFERENCES instance_zones(id) ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 	}
 
 	for _, stmt := range migrations {

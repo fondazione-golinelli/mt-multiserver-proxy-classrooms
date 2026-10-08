@@ -500,7 +500,7 @@ func (c *controller) showWorldTools(cc *proxy.ClientConn) {
 	}
 
 	var b strings.Builder
-	fsOpen(&b, 11, 9.8)
+	fsOpen(&b, 11, 11)
 	fsHeader(&b, 11, "World Tools", inst.Title(), false, true)
 	if inst.ClassID != nil {
 		b.WriteString(styledBtn(7.4, 0.2, 2.55, 0.6, "wt_groups", "Edit groups", colorButton))
@@ -522,7 +522,7 @@ func (c *controller) showWorldTools(cc *proxy.ClientConn) {
 	b.WriteString(hint(0.55, 3.15, "You'll fly through blocks and mark two corners and a teleport point."))
 
 	// Zones.
-	b.WriteString(box(0.3, 3.7, 10.4, 5.85, colorCard))
+	b.WriteString(box(0.3, 3.7, 10.4, 7.05, colorCard))
 	b.WriteString(sectionTitle(0.55, 4.0, fmt.Sprintf("Zones in this world (%d)", len(zones))))
 	if len(zones) > 0 {
 		b.WriteString(styledBtn(7.6, 3.8, 2.9, 0.5, "wt_show", "Show in the world", colorButton))
@@ -547,8 +547,9 @@ func (c *controller) showWorldTools(cc *proxy.ClientConn) {
 	if len(zones) == 0 {
 		b.WriteString(hint(0.6, 4.7, "No zones yet: everyone can build everywhere."))
 	}
-	listH := 9.4 - listTop
-	b.WriteString(scrollbarFor("scr_wt_zones", 10.35, listTop, listH, len(zones), 0.85, 0.05))
+	listH := 10.6 - listTop
+	b.WriteString(scrollbarFor("scr_wt_zones", 10.35, listTop, listH, len(zones), 1.35, 0.05))
+	missionsByZone, _ := c.getMissionsForWorld(inst.ID)
 	b.WriteString(fmt.Sprintf("scroll_container[0.45,%g;9.85,%g;scr_wt_zones;vertical;0.1]", listTop, listH))
 	accessItems := dropdownItems(options)
 	zy := 0.05
@@ -566,10 +567,25 @@ func (c *controller) showWorldTools(cc *proxy.ClientConn) {
 		if len(name) > 11 {
 			name = append(name[:10], '…')
 		}
-		b.WriteString(box(0, zy, 9.8, 0.77, colorRow))
-		b.WriteString(box(0, zy, 0.14, 0.77, color))
+		b.WriteString(box(0, zy, 9.8, 1.27, colorRow))
+		b.WriteString(box(0, zy, 0.14, 1.27, color))
 		b.WriteString(fmt.Sprintf("label[0.35,%g;%s]", zy+0.24, fmtEsc(string(name))))
 		b.WriteString(fmt.Sprintf("label[0.35,%g;%s]", zy+0.56, fmtEsc(mcColorize(muted, z.size()))))
+		// Second line: the zone's mission.
+		if m := missionsByZone[z.ID]; m != nil {
+			summary, sumColor := c.missionSummary(m)
+			title := []rune(m.Title)
+			if len(title) > 24 {
+				title = append(title[:23], '…')
+			}
+			b.WriteString(fmt.Sprintf("label[0.35,%g;%s]", zy+0.98, fmtEsc(
+				mcColorize(light, "Mission: "+string(title))+mcColorize(sumColor, "   "+summary))))
+			b.WriteString(btn(7.62, zy+0.75, 2.08, 0.45, "wt_mission_"+id, "Open mission"))
+		} else {
+			b.WriteString(fmt.Sprintf("label[0.35,%g;%s]", zy+0.98, fmtEsc(mcColorize(muted, "No mission"))))
+			b.WriteString(styledBtn(7.62, zy+0.75, 2.08, 0.45, "wt_mission_"+id, "+ Mission", colorPrimary))
+			b.WriteString(tooltip("wt_mission_"+id, "Give this zone a mission: deliveries, animals or blocks to reach"))
+		}
 		b.WriteString(fmt.Sprintf("dropdown[2.25,%g;3.5,0.52;wt_access_%s;%s;%d;true]",
 			zy+0.13, id, accessItems, zoneAccessIndex(z, groups)))
 		b.WriteString(tooltip("wt_access_"+id, "Who can build inside this zone"))
@@ -587,7 +603,7 @@ func (c *controller) showWorldTools(cc *proxy.ClientConn) {
 		} else {
 			b.WriteString(iconBtn(9.2, zy+0.13, 0.52, "zone_del_"+id, iconClose, "Remove zone"))
 		}
-		zy += 0.85
+		zy += 1.35
 	}
 	b.WriteString("scroll_container_end[]")
 
@@ -716,6 +732,11 @@ func (c *controller) handleWorldTools(cc *proxy.ClientConn, fields []mt.Field) {
 				report(n, msg, "group "+g.Name)
 			}
 			c.showWorldTools(cc)
+			return
+		case strings.HasPrefix(k, "wt_mission_"):
+			if z := findZone(strings.TrimPrefix(k, "wt_mission_")); z != nil {
+				c.openMissionEditor(cc, inst, z.ID)
+			}
 			return
 		case strings.HasPrefix(k, "zone_del_"):
 			idStr := strings.TrimPrefix(k, "zone_del_")
