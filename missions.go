@@ -111,6 +111,7 @@ type missionDraft struct {
 	Target      string // selected catalog key
 	Count       int    // amount for the next goal
 	ToolAmount  int    // amount added per tool click
+	EditingID   int    // mission being edited; 0 when creating a new one
 }
 
 func newMissionDraft(zoneID int) *missionDraft {
@@ -180,6 +181,35 @@ func (c *controller) createMission(inst *instanceData, d *missionDraft) (bool, s
 	}
 	c.pushZones(inst)
 	return true, "Mission " + title + " started."
+}
+
+// updateMission saves edited goals and tools of a mission still in progress.
+// The mission keeps its ID, so tools already handed out and progress stay.
+func (c *controller) updateMission(inst *instanceData, d *missionDraft) (bool, string) {
+	title := cleanShortName(d.Title, 40)
+	if title == "" {
+		return false, "Give the mission a title."
+	}
+	if len(d.Goals) == 0 {
+		return false, "Add at least one goal."
+	}
+	goals, _ := json.Marshal(d.Goals)
+	tools, _ := json.Marshal(d.Tools)
+	res, err := c.db.Exec(`UPDATE zone_missions SET title = ?, description = ?, objectives = ?, tools = ?
+		WHERE id = ? AND zone_id = ? AND completed_at IS NULL`,
+		title, cleanShortName(d.Description, 120), string(goals), string(tools), d.EditingID, d.ZoneID)
+	if err != nil {
+		return false, "Could not save the mission."
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return false, "The mission is already completed: it can no longer be changed."
+	}
+	// Goal indexes may have changed: wait for a fresh report.
+	c.mu.Lock()
+	delete(c.runtime.missionProgress, d.EditingID)
+	c.mu.Unlock()
+	c.pushZones(inst)
+	return true, "Mission " + title + " updated."
 }
 
 func (c *controller) deleteMission(inst *instanceData, zoneID int) {

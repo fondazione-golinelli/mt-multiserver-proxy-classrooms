@@ -144,7 +144,10 @@ func (c *controller) showMissionEditor(cc *proxy.ClientConn, zoneID int) {
 		c.notify(cc, "Could not load the mission: "+err.Error())
 		return
 	}
-	if mission != nil {
+	draft := c.missionDraftFor(cc.Name())
+	editing := mission != nil && draft != nil && draft.ZoneID == zoneID && draft.EditingID == mission.ID &&
+		!mission.CompletedAt.Valid
+	if mission != nil && !editing {
 		var b strings.Builder
 		fsOpen(&b, 12, 10.4)
 		fsHeader(&b, 12, "Mission · "+z.Name, "Played by: "+c.missionAudience(inst, *z), true, true)
@@ -153,8 +156,7 @@ func (c *controller) showMissionEditor(cc *proxy.ClientConn, zoneID int) {
 		return
 	}
 
-	draft := c.missionDraftFor(cc.Name())
-	if draft == nil || draft.ZoneID != zoneID {
+	if draft == nil || draft.ZoneID != zoneID || (mission == nil && draft.EditingID != 0) {
 		draft = newMissionDraft(zoneID)
 		c.mu.Lock()
 		c.runtime.missionDrafts[cc.Name()] = draft
@@ -165,7 +167,11 @@ func (c *controller) showMissionEditor(cc *proxy.ClientConn, zoneID int) {
 	const w, h = 14.2, 11.2
 	var b strings.Builder
 	fsOpen(&b, w, h)
-	fsHeader(&b, w, "New mission · "+z.Name, "Played by: "+c.missionAudience(inst, *z), true, true)
+	heading := "New mission · "
+	if editing {
+		heading = "Edit mission · "
+	}
+	fsHeader(&b, w, heading+z.Name, "Played by: "+c.missionAudience(inst, *z), true, true)
 
 	// Title and description.
 	b.WriteString(box(0.3, 1.3, 13.6, 1.45, colorCard))
@@ -221,11 +227,18 @@ func (c *controller) showMissionEditor(cc *proxy.ClientConn, zoneID int) {
 	for _, g := range draft.Goals {
 		hasDeliver = hasDeliver || g.Type == "deliver"
 	}
-	if hasDeliver {
+	if editing {
+		b.WriteString(hint(0.35, 10.6, "Progress and tools already given are kept."))
+	} else if hasDeliver {
 		b.WriteString(fmt.Sprintf("image[0.35,10.38;0.42,0.42;%s]", iconWarning))
 		b.WriteString(hint(0.9, 10.6, "After starting you get the delivery chest: place it inside the zone."))
 	}
-	b.WriteString(styledBtn(10.8, 10.2, 3.1, 0.8, "ms_start", "Start mission", colorPrimary))
+	if editing {
+		b.WriteString(btn(8.25, 10.2, 2.4, 0.8, "ms_cancel_edit", "Cancel"))
+		b.WriteString(styledBtn(10.8, 10.2, 3.1, 0.8, "ms_start", "Save changes", colorPrimary))
+	} else {
+		b.WriteString(styledBtn(10.8, 10.2, 3.1, 0.8, "ms_start", "Start mission", colorPrimary))
+	}
 
 	cc.ShowFormspec("classrooms:mission", b.String())
 }
@@ -371,10 +384,17 @@ func (c *controller) writeMissionStatus(b *strings.Builder, cc *proxy.ClientConn
 	if c.isDeleteArmed(cc.Name(), fmt.Sprintf("mission:%d", z.ID)) {
 		b.WriteString(coloredLbl(0.55, 9.65, danger, "Sure? Progress is lost."))
 		b.WriteString(styledBtn(8.0, 9.3, 3.7, 0.75, "ms_delete", "Yes, delete mission", colorDanger))
+		return
+	}
+	if !complete {
+		b.WriteString(btn(0.3, 9.3, 3.6, 0.75, "ms_edit", "Edit goals & tools"))
+		b.WriteString(tooltip("ms_edit", "Change goals and support tools: progress and tools already given stay"))
+		b.WriteString(btn(4.05, 9.3, 3.75, 0.75, "ms_retools", "Give tools again"))
+		b.WriteString(tooltip("ms_retools", "Every student gets the support tools again the next time they are in the zone"))
 	} else {
 		b.WriteString(hint(0.55, 9.65, "Delete it to create a new one."))
-		b.WriteString(styledBtn(8.0, 9.3, 3.7, 0.75, "ms_delete", "Delete mission", colorDanger))
 	}
+	b.WriteString(styledBtn(8.0, 9.3, 3.7, 0.75, "ms_delete", "Delete mission", colorDanger))
 }
 
 func (c *controller) handleMissionEditor(cc *proxy.ClientConn, fields []mt.Field) {
@@ -410,6 +430,35 @@ func (c *controller) handleMissionEditor(cc *proxy.ClientConn, fields []mt.Field
 	}
 	if has("ms_chest") {
 		c.sendToPlayerServer(cc.Name(), map[string]string{"action": "give_delivery_chest", "player": cc.Name()})
+		return
+	}
+	if has("ms_edit") || has("ms_retools") {
+		m, err := c.getMission(zoneID)
+		if err != nil || m == nil || m.CompletedAt.Valid {
+			c.notify(cc, "The mission is completed or no longer exists.")
+			c.showMissionEditor(cc, zoneID)
+			return
+		}
+		if has("ms_retools") {
+			c.sendToPlayerServer(cc.Name(), map[string]interface{}{"action": "mission_reset_tools", "mission": m.ID})
+			c.notify(cc, "Students will get the tools again when they are in the zone.")
+		} else {
+			d := newMissionDraft(zoneID)
+			d.EditingID, d.Title, d.Description = m.ID, m.Title, m.Description
+			d.Goals = append([]missionGoal(nil), m.Goals...)
+			d.Tools = append([]missionTool(nil), m.Tools...)
+			c.mu.Lock()
+			c.runtime.missionDrafts[cc.Name()] = d
+			c.mu.Unlock()
+		}
+		c.showMissionEditor(cc, zoneID)
+		return
+	}
+	if has("ms_cancel_edit") {
+		c.mu.Lock()
+		c.runtime.missionDrafts[cc.Name()] = newMissionDraft(zoneID)
+		c.mu.Unlock()
+		c.showMissionEditor(cc, zoneID)
 		return
 	}
 
@@ -485,7 +534,15 @@ func (c *controller) handleMissionEditor(cc *proxy.ClientConn, fields []mt.Field
 		c.notify(cc, message)
 	}
 
-	if has("ms_start") {
+	if has("ms_start") && draft.EditingID != 0 {
+		ok, msg := c.updateMission(inst, draft)
+		c.notify(cc, msg)
+		if ok {
+			c.mu.Lock()
+			c.runtime.missionDrafts[cc.Name()] = newMissionDraft(zoneID)
+			c.mu.Unlock()
+		}
+	} else if has("ms_start") {
 		ok, msg := c.createMission(inst, draft)
 		c.notify(cc, msg)
 		if ok {

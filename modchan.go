@@ -30,7 +30,8 @@ func (c *controller) handleBridgeMessage(cc *proxy.ClientConn, sender, msg strin
 	action, _ := data["action"].(string)
 	if action == "open_portal_worlds" {
 		player, _ := data["player"].(string)
-		if sender != "" || player != cc.Name() || cc.ServerName() != c.cfg.LobbyServer {
+		// From the HUB portal or the "Class worlds" item on any server.
+		if sender != "" || player != cc.Name() {
 			return
 		}
 		c.showPortalWorlds(cc)
