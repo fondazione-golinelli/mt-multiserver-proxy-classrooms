@@ -210,7 +210,7 @@ func migrateDB(db *sql.DB) error {
 		"ALTER TABLE instance_settings ADD COLUMN spawn_pitch DOUBLE DEFAULT NULL AFTER spawn_yaw"); err != nil {
 		return err
 	}
-	for _, col := range []string{"student_fly", "student_creative"} {
+	for _, col := range []string{"student_fly", "student_creative", "world_locked"} {
 		if err := addColumnIfMissing(db, "instance_settings", col,
 			"ALTER TABLE instance_settings ADD COLUMN "+col+" TINYINT(1) NOT NULL DEFAULT 0"); err != nil {
 			return err

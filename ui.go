@@ -35,6 +35,8 @@ const (
 	// A "pause" symbol drawn with texture modifiers: two bars on a
 	// transparent square.
 	iconFreeze = "[fill:16x16:#00000000^[fill:4x12:3,2:#9fd8ff^[fill:4x12:9,2:#9fd8ff"
+	// A padlock: shackle and body.
+	iconLock = "[fill:16x16:#00000000^[fill:8x2:4,1:#e0b43f^[fill:2x6:4,1:#e0b43f^[fill:2x6:10,1:#e0b43f^[fill:12x8:2,7:#e0b43f^[fill:2x3:7,9:#4a3a12"
 )
 
 const (

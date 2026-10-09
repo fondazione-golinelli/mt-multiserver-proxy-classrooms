@@ -711,10 +711,13 @@ func (c *controller) handleInstanceSettings(cc *proxy.ClientConn, fields []mt.Fi
 	if v, ok := fm["setting_hunger"]; ok && boolField(v) != settings.EnableHunger {
 		settings.EnableHunger = boolField(v)
 		settingChanged = true
-		needsRestart = true
 	}
 	if v, ok := fm["setting_student_fly"]; ok && boolField(v) != settings.StudentFly {
 		settings.StudentFly = boolField(v)
+		settingChanged = true
+	}
+	if v, ok := fm["setting_locked"]; ok && boolField(v) != settings.WorldLocked {
+		settings.WorldLocked = boolField(v)
 		settingChanged = true
 	}
 	if v, ok := fm["setting_student_creative"]; ok && boolField(v) != settings.StudentCreative {
@@ -776,7 +779,7 @@ func (c *controller) handleInstanceSettings(cc *proxy.ClientConn, fields []mt.Fi
 			return
 		}
 		if c.sendSettingsToInstance(inst, settings) {
-			c.notify(cc, "Settings saved. Damage and PvP apply immediately; mob, hunger, explosion, and spawnpoint changes need restart.")
+			c.notify(cc, "Settings saved. Hurt, PvP, hunger, flying and creative apply immediately; mobs and explosions need a restart.")
 		} else {
 			c.notify(cc, "Settings saved. Start or join the instance before applying them to luanti.conf.")
 		}
@@ -786,21 +789,22 @@ func (c *controller) handleInstanceSettings(cc *proxy.ClientConn, fields []mt.Fi
 	if _, ok := fm["btn_reset_settings"]; ok {
 		safe := defaultInstanceSettings(inst.ID)
 		safe.StaticSpawnpoint, safe.SpawnYaw, safe.SpawnPitch = settings.StaticSpawnpoint, settings.SpawnYaw, settings.SpawnPitch
+		needsRestart = needsRestart || safe.MobsSpawn != settings.MobsSpawn ||
+			safe.OnlyPeacefulMobs != settings.OnlyPeacefulMobs || safe.ExplosionsGriefing != settings.ExplosionsGriefing
 		settings = safe
 		settingChanged = true
-		needsRestart = true
 	}
-	// Every change is saved and pushed at once: damage and PvP apply live,
-	// the rest is written as pending settings for the next restart.
+	// Every change is saved and pushed at once: hurt, PvP, hunger, flying and
+	// creative apply live (also to players joining later); mobs and
+	// explosions are written as pending settings for the next restart, which
+	// sends the settings again before restarting.
 	if settingChanged {
 		if err := c.saveInstanceSettings(settings); err != nil {
 			c.notify(cc, "Could not save setting: "+err.Error())
 			c.showInstanceSettings(cc, inst.ID)
 			return
 		}
-		if !c.sendSettingsToInstance(inst, settings) {
-			needsRestart = true
-		}
+		c.sendSettingsToInstance(inst, settings)
 		if needsRestart {
 			c.setRestartPending(inst.ID, true)
 		}

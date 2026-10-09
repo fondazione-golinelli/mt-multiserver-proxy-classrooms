@@ -57,6 +57,16 @@ func (c *controller) handleBridgeMessage(cc *proxy.ClientConn, sender, msg strin
 		c.showPanelHome(cc)
 		return
 	}
+	if action == "restart_needed" {
+		// A live rule needs engine support the world did not start with
+		// (worlds created before rules were live): ask for one restart.
+		if inst, err := c.getInstanceByProxyName(cc.ServerName()); err == nil && inst != nil {
+			reason, _ := data["reason"].(string)
+			log.Printf("[%s] instance %s needs a restart for %s", pluginName, inst.ID, reason)
+			c.setRestartPending(inst.ID, true)
+		}
+		return
+	}
 	if action == "mission_progress" {
 		c.handleMissionProgress(data)
 		return
@@ -137,8 +147,8 @@ func (c *controller) handleBridgeMessage(cc *proxy.ClientConn, sender, msg strin
 		teacher = cc
 	}
 	if teacher != nil {
-		c.setRestartPending(capture.InstanceID, true)
-		teacher.SendChatMsg("[Classrooms] Arrival point saved. Restart the world to apply it.")
+		// The bridge already set it live: joins and respawns use it now.
+		teacher.SendChatMsg("[Classrooms] Arrival point saved: players appear here from now on.")
 		c.showInstanceSettings(teacher, capture.InstanceID)
 	}
 }

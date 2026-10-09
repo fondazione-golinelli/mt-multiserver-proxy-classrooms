@@ -390,6 +390,9 @@ func (c *controller) writeCurrentWorldCard(b *strings.Builder, inst *instanceDat
 		if c.isInstanceTimeStopped(inst.ID) {
 			timeState = "time paused"
 		}
+		if settings.WorldLocked {
+			timeState += "  ·  world locked"
+		}
 		b.WriteString(hint(9.45, 3.38, "Mobs: "+mobs+"  ·  "+timeState))
 	}
 
@@ -647,13 +650,13 @@ func (c *controller) showInstanceSettings(cc *proxy.ClientConn, instanceID strin
 	b.WriteString(box(0.3, 2.15, 5.1, 3.15, colorCard))
 	b.WriteString(sectionTitle(0.55, 2.45, "Players"))
 	settingRow(&b, 0.55, 2.95, iconHeart, "setting_damage", "Can get hurt",
-		"Players lose health from falls, lava, mobs... Off = nobody can get hurt.", settings.EnableDamage)
+		"Players lose health from falls, lava, mobs... Off = nobody can get hurt. Teachers, creative and flying players never get hurt. Applies at once.", settings.EnableDamage)
 	settingRow(&b, 0.55, 3.45, iconPvP, "setting_pvp", "Can hit each other (PvP)",
-		"Players can damage other players. Needs 'Can get hurt'.", settings.EnablePVP)
+		"Players can damage other players. Needs 'Can get hurt'. Applies at once.", settings.EnablePVP)
 	settingRow(&b, 0.55, 3.95, "", "setting_hunger", "Hunger",
-		"Players need to eat. Needs 'Can get hurt'. Applies after a restart.", settings.EnableHunger)
+		"Players need to eat. Teachers, creative and flying players never get hungry. Applies at once.", settings.EnableHunger)
 	settingRow(&b, 0.55, 4.45, "", "setting_student_fly", "Students can fly",
-		"Students may fly (K to toggle). Teachers always can. Applies at once.", settings.StudentFly)
+		"Students may fly (K) and move fast (J). Teachers always can. Flying players don't get hurt or hungry. Applies at once.", settings.StudentFly)
 	settingRow(&b, 0.55, 4.95, "", "setting_student_creative", "Student creative mode",
 		"Students get unlimited blocks and items and break blocks instantly. Applies at once.", settings.StudentCreative)
 
@@ -666,6 +669,8 @@ func (c *controller) showInstanceSettings(cc *proxy.ClientConn, instanceID strin
 		"No hostile monsters (zombies, creepers...). Applies after a restart.", settings.OnlyPeacefulMobs)
 	settingRow(&b, 5.85, 3.95, "", "setting_explosions", "Explosions break blocks",
 		"TNT and creepers destroy builds. Applies after a restart.", settings.ExplosionsGriefing)
+	settingRow(&b, 5.85, 4.45, iconLock, "setting_locked", "Lock the world",
+		"Students can only look around, like spectators: no building, digging, using blocks or hitting. Teachers are not affected. Applies at once.", settings.WorldLocked)
 
 	// Spawn point.
 	b.WriteString(box(0.3, 5.45, 10.4, 1.4, colorCard))
@@ -678,7 +683,7 @@ func (c *controller) showInstanceSettings(cc *proxy.ClientConn, instanceID strin
 		}
 	}
 	b.WriteString(coloredLbl(0.55, 6.2, light, spawn))
-	b.WriteString(hint(0.55, 6.55, "Where players appear when they join. Applies after a restart."))
+	b.WriteString(hint(0.55, 6.55, "Where players appear on join and respawn: at once."))
 	if cc.ServerName() == inst.ProxyName {
 		b.WriteString(styledBtn(7.3, 5.85, 3.2, 0.65, "btn_capture_spawn", "Use my position", colorPrimary))
 		b.WriteString(tooltip("btn_capture_spawn", "Saves where you stand and the direction you look"))
@@ -701,7 +706,7 @@ func (c *controller) showInstanceSettings(cc *proxy.ClientConn, instanceID strin
 		b.WriteString(box(0.3, 7.0, 10.4, 1.35, colorCard))
 		b.WriteString(fmt.Sprintf("image[0.55,7.25;0.42,0.42;%s]", iconCheck))
 		b.WriteString(hint(1.25, 7.45, "Changes are saved as soon as you click."))
-		b.WriteString(hint(1.25, 7.9, "Hurt, PvP, flying, creative: at once. Others: after a restart."))
+		b.WriteString(hint(1.25, 7.9, "Only mobs and explosions wait for a restart."))
 	}
 
 	b.WriteString(btn(0.3, 8.6, 4.5, 0.7, "btn_reset_settings", "Reset to classroom-safe"))
