@@ -62,6 +62,16 @@ func hasPrefixKey(fm map[string]string, prefix string) bool {
 	return false
 }
 
+// prefixKey returns the first field whose name starts with prefix.
+func prefixKey(fm map[string]string, prefix string) (string, bool) {
+	for k := range fm {
+		if strings.HasPrefix(k, prefix) {
+			return k, true
+		}
+	}
+	return "", false
+}
+
 // handleInstanceTabs switches between the Overview, Rules and Time & weather
 // tabs of a world. It returns true when a tab button was pressed.
 func (c *controller) handleInstanceTabs(cc *proxy.ClientConn, fm map[string]string, inst *instanceData) bool {
@@ -703,6 +713,14 @@ func (c *controller) handleInstanceSettings(cc *proxy.ClientConn, fields []mt.Fi
 		settingChanged = true
 		needsRestart = true
 	}
+	if v, ok := fm["setting_student_fly"]; ok && boolField(v) != settings.StudentFly {
+		settings.StudentFly = boolField(v)
+		settingChanged = true
+	}
+	if v, ok := fm["setting_student_creative"]; ok && boolField(v) != settings.StudentCreative {
+		settings.StudentCreative = boolField(v)
+		settingChanged = true
+	}
 	if v, ok := fm["setting_mobs"]; ok && boolField(v) != settings.MobsSpawn {
 		settings.MobsSpawn = boolField(v)
 		settingChanged = true
@@ -1035,13 +1053,37 @@ func (c *controller) handleStudentEditor(cc *proxy.ClientConn, fields []mt.Field
 		return
 	}
 
+	// Search and scroll position are sent with every submit.
+	view := c.studentList(cc.Name(), classID)
+	c.mu.Lock()
+	if v, ok := scrollValue(fm["scr_people_students"]); ok {
+		view.Scroll["scr_people_students"] = v
+	}
+	searchChanged := false // a new search starts from the top
+	if v, ok := fm["stu_search"]; ok && strings.TrimSpace(v) != view.PeopleSearch {
+		view.PeopleSearch, searchChanged = strings.TrimSpace(v), true
+	}
+	if _, ok := fm["stu_search_clear"]; ok {
+		view.PeopleSearch, searchChanged = "", true
+	}
+	if searchChanged {
+		view.Scroll["scr_people_students"] = 0
+	}
+	c.mu.Unlock()
+	_, searchGo := fm["stu_search_go"]
+	_, searchClear := fm["stu_search_clear"]
+	if searchGo || searchClear || fm["key_enter_field"] == "stu_search" {
+		c.showStudentEditor(cc, classID)
+		return
+	}
+
 	if _, ok := fm["btn_create_student"]; ok {
 		c.notify(cc, c.createStudentAccount(classID, cc.Name(), strings.TrimSpace(fm["new_student_name"]), fm["new_student_password"], fm["new_student_confirm"]))
 		c.showStudentEditor(cc, classID)
 		return
 	}
 
-	if _, ok := fm["btn_add_student"]; ok {
+	if _, ok := fm["btn_add_student"]; ok || fm["key_enter_field"] == "add_student_name" {
 		sName := strings.TrimSpace(fm["add_student_name"])
 		if ok, msg := c.addStudent(classID, sName); !ok {
 			c.notify(cc, msg)

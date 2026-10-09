@@ -34,6 +34,8 @@ type studentListView struct {
 	Selected    map[string]bool
 	Scroll      map[string]int
 	ClassFilter string // filter of the student list in the class view
+	// People → Students search.
+	PeopleSearch string
 }
 
 func (c *controller) studentList(player string, classID int) *studentListView {
@@ -150,19 +152,18 @@ func (c *controller) showGroupsEditor(cc *proxy.ClientConn, classID int) {
 		}
 	}
 
-	const w = 15.5
 	var b strings.Builder
-	c.peopleFrameWidth(&b, cc, cls, peopleTabGroups, w)
+	c.peopleFrameSize(&b, cc, cls, peopleTabGroups, peopleWideW, peopleWideH)
 
 	// ── Left: groups ──
-	b.WriteString(box(0.3, 2.05, 5.3, 7.35, colorCard))
-	b.WriteString(sectionTitle(0.5, 2.3, "New group"))
-	b.WriteString("field[0.5,2.5;3.3,0.55;grp_new_name;;]")
+	b.WriteString(box(0.3, 2.05, 6.6, 9.25, colorCard))
+	b.WriteString(sectionTitle(0.55, 2.35, "New group"))
+	b.WriteString("field[0.55,2.6;4.3,0.65;grp_new_name;;]")
 	b.WriteString("field_close_on_enter[grp_new_name;false]")
 	b.WriteString(tooltip("grp_new_name", "e.g. Team A, Builders, Table 3"))
-	b.WriteString(styledBtn(3.95, 2.5, 1.45, 0.55, "grp_create", "+ Create", colorPrimary))
+	b.WriteString(styledBtn(5.0, 2.6, 1.65, 0.65, "grp_create", "+ Create", colorPrimary))
 
-	b.WriteString(sectionTitle(0.5, 3.45, fmt.Sprintf("Groups (%d)", len(groups))))
+	b.WriteString(sectionTitle(0.55, 3.75, fmt.Sprintf("Groups (%d)", len(groups))))
 	allColor, noneColor := colorButton, colorButton
 	if view.Filter == "all" {
 		allColor = colorTabFocus
@@ -170,14 +171,15 @@ func (c *controller) showGroupsEditor(cc *proxy.ClientConn, classID int) {
 	if view.Filter == "none" {
 		noneColor = colorTabFocus
 	}
-	b.WriteString(styledBtn(0.5, 3.7, 2.4, 0.5, "grp_view_all", fmt.Sprintf("All (%d)", len(students)), allColor))
-	b.WriteString(styledBtn(3.0, 3.7, 2.4, 0.5, "grp_view_none", fmt.Sprintf("No group (%d)", len(students)-grouped), noneColor))
+	b.WriteString(styledBtn(0.55, 4.0, 2.95, 0.6, "grp_view_all", fmt.Sprintf("All students (%d)", len(students)), allColor))
+	b.WriteString(styledBtn(3.65, 4.0, 3.0, 0.6, "grp_view_none", fmt.Sprintf("No group (%d)", len(students)-grouped), noneColor))
 
 	if len(groups) == 0 {
-		b.WriteString(hint(0.6, 4.7, "No groups yet: create one above."))
+		b.WriteString(hint(0.6, 5.1, "No groups yet: create one above."))
 	}
-	b.WriteString(scrollbarAt("scr_groups", 5.3, 4.35, 4.95, len(groups), 1.7, 0.05, view.Scroll["scr_groups"]))
-	b.WriteString("scroll_container[0.4,4.35;4.85,4.95;scr_groups;vertical;0.1]")
+	const groupTop, groupH, groupStep = 4.8, 6.35, 2.2
+	b.WriteString(scrollbarAt("scr_groups", 6.55, groupTop, groupH, len(groups), groupStep, 0.05, view.Scroll["scr_groups"]))
+	b.WriteString(fmt.Sprintf("scroll_container[0.45,%g;6.05,%g;scr_groups;vertical;0.1]", groupTop, groupH))
 	gy := 0.05
 	for _, g := range groups {
 		id := strconv.Itoa(g.ID)
@@ -186,39 +188,42 @@ func (c *controller) showGroupsEditor(cc *proxy.ClientConn, classID int) {
 			bg = colorCurrent
 		}
 		online := len(onlineOf(g.Members))
-		b.WriteString(box(0, gy, 4.8, 1.6, bg))
-		b.WriteString(box(0, gy, 0.14, 1.6, g.Color))
-		b.WriteString(fmt.Sprintf("label[0.3,%g;%s]", gy+0.25, fmtEsc(mcColorize(g.Color, g.Name))))
-		b.WriteString(fmt.Sprintf("label[0.3,%g;%s]", gy+0.55, fmtEsc(mcColorize(muted,
-			fmt.Sprintf("%s · %d online", plural(len(g.Members), "student", "students"), online)))))
-		b.WriteString(fmt.Sprintf("label[0.3,%g;%s]", gy+0.85, fmtEsc(mcColorize(light, memberPreview(g.Members, 28)))))
-		b.WriteString(btn(0.3, gy+1.05, 0.95, 0.45, "grp_view_"+id, "Show"))
+		b.WriteString(box(0, gy, 6.0, 2.1, bg))
+		b.WriteString(box(0, gy, 0.16, 2.1, g.Color))
+		b.WriteString(fmt.Sprintf("label[0.35,%g;%s]", gy+0.3, fmtEsc(mcColorize(g.Color, g.Name)+
+			mcColorize(muted, fmt.Sprintf("   %s · %d online", plural(len(g.Members), "student", "students"), online)))))
+		preview := memberPreview(g.Members, 36)
+		if len(g.Members) == 0 {
+			preview = mcColorize(muted, "Nobody yet: select students and move them here.")
+		}
+		b.WriteString(fmt.Sprintf("label[0.35,%g;%s]", gy+0.8, fmtEsc(mcColorize(light, preview))))
+		b.WriteString(btn(0.35, gy+1.3, 1.3, 0.55, "grp_view_"+id, "Show"))
 		b.WriteString(tooltip("grp_view_"+id, "List only the students of this group"))
-		b.WriteString(btn(1.33, gy+1.05, 1.0, 0.45, "grp_gather_"+id, "Bring"))
+		b.WriteString(btn(1.75, gy+1.3, 1.3, 0.55, "grp_gather_"+id, "Bring"))
 		b.WriteString(tooltip("grp_gather_"+id, "Teleports the online students of this group to you"))
 		freezeLabel, freezeColor := "Freeze", colorButton
 		if c.isGroupFrozen(g) {
 			freezeLabel, freezeColor = "Unfreeze", colorActive
 		}
-		b.WriteString(styledBtn(2.41, gy+1.05, 1.5, 0.45, "grp_freeze_"+id, freezeLabel, freezeColor))
+		b.WriteString(styledBtn(3.15, gy+1.3, 1.7, 0.55, "grp_freeze_"+id, freezeLabel, freezeColor))
 		if c.isDeleteArmed(cc.Name(), "group:"+id) {
-			b.WriteString(styledBtn(3.95, gy+1.05, 0.75, 0.45, "grp_del_"+id, "Sure?", colorDanger))
+			b.WriteString(styledBtn(4.95, gy+1.3, 0.95, 0.55, "grp_del_"+id, "Sure?", colorDanger))
 		} else {
-			b.WriteString(iconBtn(4.25, gy+1.05, 0.45, "grp_del_"+id, iconClose, "Delete group (students stay in the class)"))
+			b.WriteString(iconBtn(5.35, gy+1.3, 0.55, "grp_del_"+id, iconClose, "Delete group (students stay in the class)"))
 		}
-		gy += 1.7
+		gy += groupStep
 	}
 	b.WriteString("scroll_container_end[]")
 
 	// ── Right: students ──
-	b.WriteString(box(5.8, 2.05, 9.4, 7.35, colorCard))
-	b.WriteString(fmt.Sprintf("field[6.0,2.25;4.2,0.6;grp_search;;%s]", fmtEsc(view.Search)))
+	b.WriteString(box(7.1, 2.05, 9.6, 9.25, colorCard))
+	b.WriteString(fmt.Sprintf("field[7.35,2.3;4.6,0.65;grp_search;;%s]", fmtEsc(view.Search)))
 	b.WriteString("field_close_on_enter[grp_search;false]")
 	b.WriteString(tooltip("grp_search", "Search by name, then press Enter"))
-	b.WriteString(iconBtn(10.3, 2.25, 0.6, "grp_search_go", iconSearch, "Search"))
+	b.WriteString(iconBtn(12.05, 2.3, 0.65, "grp_search_go", iconSearch, "Search"))
 	labels, keys := filterOptions(groups, groupEditorFixedFilters)
-	b.WriteString(fmt.Sprintf("dropdown[11.0,2.25;3.45,0.6;grp_filter;%s;%d;true]", dropdownItems(labels), indexOf(keys, view.Filter)))
-	b.WriteString(iconBtn(14.55, 2.25, 0.6, "grp_filter_clear", iconClose, "Clear search and filter"))
+	b.WriteString(fmt.Sprintf("dropdown[12.8,2.3;3.1,0.65;grp_filter;%s;%d;true]", dropdownItems(labels), indexOf(keys, view.Filter)))
+	b.WriteString(iconBtn(16.0, 2.3, 0.65, "grp_filter_clear", iconClose, "Clear search and filter"))
 
 	shown := filterStudents(students, byStudent, view.Filter, view.Search)
 	selectedCount := 0
@@ -227,46 +232,47 @@ func (c *controller) showGroupsEditor(cc *proxy.ClientConn, classID int) {
 			selectedCount++
 		}
 	}
-	b.WriteString(hint(6.0, 3.17, fmt.Sprintf("Showing %d of %d  ·  %d selected", len(shown), len(students), selectedCount)))
-	b.WriteString(btn(10.6, 2.97, 2.0, 0.45, "grp_sel_all", "Select shown"))
-	b.WriteString(btn(12.7, 2.97, 2.3, 0.45, "grp_sel_none", "Clear selection"))
+	b.WriteString(hint(7.4, 3.4, fmt.Sprintf("Showing %d of %d  ·  %d selected", len(shown), len(students), selectedCount)))
+	b.WriteString(btn(12.25, 3.15, 2.05, 0.5, "grp_sel_all", "Select shown"))
+	b.WriteString(btn(14.4, 3.15, 2.25, 0.5, "grp_sel_none", "Clear selection"))
 
 	if len(shown) == 0 {
 		msg := "No students match the search or filter."
 		if len(students) == 0 {
 			msg = "No students in this class yet."
 		}
-		b.WriteString(hint(6.1, 3.95, msg))
+		b.WriteString(hint(7.45, 4.25, msg))
 	}
-	b.WriteString(scrollbarAt("scr_group_students", 14.9, 3.55, 4.15, len(shown), 0.6, 0.05, view.Scroll["scr_group_students"]))
-	b.WriteString("scroll_container[5.95,3.55;8.9,4.15;scr_group_students;vertical;0.1]")
+	const listTop, listH, rowStep = 3.85, 5.45, 0.7
+	b.WriteString(scrollbarAt("scr_group_students", 16.35, listTop, listH, len(shown), rowStep, 0.05, view.Scroll["scr_group_students"]))
+	b.WriteString(fmt.Sprintf("scroll_container[7.25,%g;9.0,%g;scr_group_students;vertical;0.1]", listTop, listH))
 	sy := 0.05
 	for _, s := range shown {
 		bg := colorRow
 		if view.Selected[s] {
 			bg = colorCurrent
 		}
-		b.WriteString(box(0, sy, 8.85, 0.55, bg))
-		b.WriteString(fmt.Sprintf("checkbox[0.15,%g;sel_%s;;%t]", sy+0.27, fmtEsc(s), view.Selected[s]))
+		b.WriteString(box(0, sy, 8.95, 0.63, bg))
+		b.WriteString(fmt.Sprintf("checkbox[0.2,%g;sel_%s;;%t]", sy+0.31, fmtEsc(s), view.Selected[s]))
 		dot := muted
 		if proxy.Find(s) != nil {
 			dot = success
 		}
-		b.WriteString(statusDot(0.7, sy+0.17, dot))
-		b.WriteString(fmt.Sprintf("label[1.05,%g;%s]", sy+0.27, fmtEsc(s)))
+		b.WriteString(statusDot(0.8, sy+0.21, dot))
+		b.WriteString(fmt.Sprintf("label[1.2,%g;%s]", sy+0.31, fmtEsc(s)))
 		if g, ok := byStudent[s]; ok {
-			b.WriteString(box(5.0, sy+0.17, 0.22, 0.22, g.Color))
-			b.WriteString(fmt.Sprintf("label[5.35,%g;%s]", sy+0.27, fmtEsc(mcColorize(g.Color, g.Name))))
+			b.WriteString(box(5.3, sy+0.2, 0.24, 0.24, g.Color))
+			b.WriteString(fmt.Sprintf("label[5.7,%g;%s]", sy+0.31, fmtEsc(mcColorize(g.Color, g.Name))))
 		} else {
-			b.WriteString(fmt.Sprintf("label[5.35,%g;%s]", sy+0.27, fmtEsc(mcColorize(muted, "no group"))))
+			b.WriteString(fmt.Sprintf("label[5.7,%g;%s]", sy+0.31, fmtEsc(mcColorize(muted, "no group"))))
 		}
-		sy += 0.6
+		sy += rowStep
 	}
 	b.WriteString("scroll_container_end[]")
 
 	// Bulk move.
-	b.WriteString(box(5.95, 7.85, 9.1, 1.4, colorRow))
-	b.WriteString(coloredLbl(6.15, 8.25, light, fmt.Sprintf("Move %s to:", plural(selectedCount, "student", "students"))))
+	b.WriteString(box(7.25, 9.5, 9.3, 1.65, colorRow))
+	b.WriteString(coloredLbl(7.5, 9.9, light, fmt.Sprintf("Move %s to:", plural(selectedCount, "student", "students"))))
 	targets := []string{"No group"}
 	for _, g := range groups {
 		targets = append(targets, g.Name)
@@ -275,9 +281,9 @@ func (c *controller) showGroupsEditor(cc *proxy.ClientConn, classID int) {
 	if target < 1 || target > len(targets) {
 		target = 1
 	}
-	b.WriteString(fmt.Sprintf("dropdown[9.4,8.0;3.2,0.6;grp_target;%s;%d;true]", dropdownItems(targets), target))
-	b.WriteString(styledBtn(12.75, 8.0, 2.15, 0.6, "grp_apply", "Apply", colorPrimary))
-	b.WriteString(hint(6.15, 8.95, "Tip: filter or search, then Select shown to move many at once."))
+	b.WriteString(fmt.Sprintf("dropdown[10.75,9.62;3.3,0.6;grp_target;%s;%d;true]", dropdownItems(targets), target))
+	b.WriteString(styledBtn(14.2, 9.62, 2.2, 0.6, "grp_apply", "Apply", colorPrimary))
+	b.WriteString(hint(7.5, 10.75, "Tip: filter or search, then Select shown to move many at once."))
 
 	cc.ShowFormspec("classrooms:groups", b.String())
 }
@@ -499,8 +505,15 @@ func (c *controller) showWorldTools(cc *proxy.ClientConn) {
 		groupByID[int64(g.ID)] = g
 	}
 
+	c.mu.RLock()
+	tab := c.runtime.worldToolsTab[cc.Name()]
+	c.mu.RUnlock()
+	if tab != "missions" {
+		tab = "zones"
+	}
+
 	var b strings.Builder
-	fsOpen(&b, 11, 11)
+	fsOpen(&b, 11, 11.85)
 	fsHeader(&b, 11, "World Tools", inst.Title(), false, true)
 	b.WriteString(styledBtn(5.75, 0.2, 1.5, 0.6, "wt_map", "Map", colorPrimary))
 	b.WriteString(tooltip("wt_map", "World map: zones, waypoints and teleport points for students"))
@@ -508,29 +521,38 @@ func (c *controller) showWorldTools(cc *proxy.ClientConn) {
 		b.WriteString(styledBtn(7.4, 0.2, 2.55, 0.6, "wt_groups", "Edit groups", colorButton))
 		b.WriteString(tooltip("wt_groups", "Create groups and choose who is in each one"))
 	}
+	tabBar(&b, 0.3, 1.3, 3.0, "wt_tab_"+tab, [][2]string{
+		{"wt_tab_zones", fmt.Sprintf("Zones (%d)", len(zones))},
+		{"wt_tab_missions", "Missions"},
+	})
+	if tab == "missions" {
+		c.writeMissionsTab(&b, cc.Name(), inst, zones, groups, groupByID)
+		cc.ShowFormspec("classrooms:world_tools", b.String())
+		return
+	}
 
 	// New zone.
-	b.WriteString(box(0.3, 1.3, 10.4, 2.2, colorCard))
-	b.WriteString(sectionTitle(0.55, 1.6, "New zone"))
-	b.WriteString(hint(2.6, 1.6, "Protect an area or mark a meeting point"))
-	b.WriteString("field[0.55,2.2;4.1,0.6;wt_name;Name;]")
+	b.WriteString(box(0.3, 2.1, 10.4, 2.2, colorCard))
+	b.WriteString(sectionTitle(0.55, 2.4, "New zone"))
+	b.WriteString(hint(2.6, 2.4, "Protect an area or mark a meeting point"))
+	b.WriteString("field[0.55,3.0;4.1,0.6;wt_name;Name;]")
 	b.WriteString("field_close_on_enter[wt_name;false]")
 	options := zoneAccessOptions(groups)
-	b.WriteString(hint(4.85, 2.0, "Who can build inside"))
-	b.WriteString(fmt.Sprintf("dropdown[4.85,2.2;3.2,0.6;wt_type;%s;1;true]", dropdownItems(options)))
+	b.WriteString(hint(4.85, 2.8, "Who can build inside"))
+	b.WriteString(fmt.Sprintf("dropdown[4.85,3.0;3.2,0.6;wt_type;%s;1;true]", dropdownItems(options)))
 	b.WriteString(fmt.Sprintf("style[wt_create;bgcolor=%s]", colorPrimary))
-	b.WriteString("button_exit[8.25,2.2;2.25,0.6;wt_create;Create zone]")
+	b.WriteString("button_exit[8.25,3.0;2.25,0.6;wt_create;Create zone]")
 	b.WriteString(tooltip("wt_create", "Fly through blocks and mark the corners in the world"))
-	b.WriteString(hint(0.55, 3.15, "You'll fly through blocks and mark two corners and a teleport point."))
+	b.WriteString(hint(0.55, 3.95, "You'll fly through blocks and mark two corners and a teleport point."))
 
 	// Zones.
-	b.WriteString(box(0.3, 3.7, 10.4, 7.05, colorCard))
-	b.WriteString(sectionTitle(0.55, 4.0, fmt.Sprintf("Zones in this world (%d)", len(zones))))
+	b.WriteString(box(0.3, 4.5, 10.4, 7.05, colorCard))
+	b.WriteString(sectionTitle(0.55, 4.8, fmt.Sprintf("Zones in this world (%d)", len(zones))))
 	if len(zones) > 0 {
-		b.WriteString(styledBtn(7.6, 3.8, 2.9, 0.5, "wt_show", "Show in the world", colorButton))
+		b.WriteString(styledBtn(7.6, 4.6, 2.9, 0.5, "wt_show", "Show in the world", colorButton))
 		b.WriteString(tooltip("wt_show", "Draws the zone borders around you for a few seconds"))
 	}
-	listTop := 4.5
+	listTop := 5.3
 	if len(groups) > 0 && len(zones) > 0 {
 		c.mu.RLock()
 		selected := c.runtime.worldToolsGroup[cc.Name()]
@@ -542,14 +564,14 @@ func (c *controller) showWorldTools(cc *proxy.ClientConn) {
 		for i, g := range groups {
 			names[i] = g.Name
 		}
-		b.WriteString(hint(0.55, 4.72, "Teleport group:"))
-		b.WriteString(fmt.Sprintf("dropdown[2.85,4.45;3.4,0.55;wt_group;%s;%d;true]", dropdownItems(names), selected))
-		listTop = 5.2
+		b.WriteString(hint(0.55, 5.52, "Teleport group:"))
+		b.WriteString(fmt.Sprintf("dropdown[2.85,5.25;3.4,0.55;wt_group;%s;%d;true]", dropdownItems(names), selected))
+		listTop = 6.0
 	}
 	if len(zones) == 0 {
-		b.WriteString(hint(0.6, 4.7, "No zones yet: everyone can build everywhere."))
+		b.WriteString(hint(0.6, 5.5, "No zones yet: everyone can build everywhere."))
 	}
-	listH := 10.6 - listTop
+	listH := 11.4 - listTop
 	b.WriteString(scrollbarFor("scr_wt_zones", 10.35, listTop, listH, len(zones), 1.35, 0.05))
 	missionsByZone, _ := c.getMissionsForWorld(inst.ID)
 	b.WriteString(fmt.Sprintf("scroll_container[0.45,%g;9.85,%g;scr_wt_zones;vertical;0.1]", listTop, listH))
@@ -631,6 +653,27 @@ func (c *controller) handleWorldTools(cc *proxy.ClientConn, fields []mt.Field) {
 			c.runtime.worldToolsGroup[cc.Name()] = idx
 			c.mu.Unlock()
 		}
+	}
+
+	for _, t := range []string{"zones", "missions"} {
+		if _, ok := fm["wt_tab_"+t]; ok {
+			c.mu.Lock()
+			c.runtime.worldToolsTab[cc.Name()] = t
+			c.mu.Unlock()
+			c.showWorldTools(cc)
+			return
+		}
+	}
+	c.rememberMissionPick(cc.Name(), fm)
+	if _, ok := fm["wm_create"]; ok {
+		c.createMissionFromWorldTools(cc, inst, groups, fm)
+		return
+	}
+	if k, ok := prefixKey(fm, "wm_open_"); ok {
+		if id, err := strconv.Atoi(strings.TrimPrefix(k, "wm_open_")); err == nil {
+			c.openMission(cc, inst, id, nil)
+		}
+		return
 	}
 
 	if _, ok := fm["wt_map"]; ok {
@@ -741,7 +784,7 @@ func (c *controller) handleWorldTools(cc *proxy.ClientConn, fields []mt.Field) {
 			return
 		case strings.HasPrefix(k, "wt_mission_"):
 			if z := findZone(strings.TrimPrefix(k, "wt_mission_")); z != nil {
-				c.openMissionEditor(cc, inst, z.ID)
+				c.openZoneMission(cc, inst, z.ID)
 			}
 			return
 		case strings.HasPrefix(k, "zone_del_"):

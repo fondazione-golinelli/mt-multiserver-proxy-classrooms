@@ -17,6 +17,8 @@ type instanceSettings struct {
 	MobsSpawn          bool
 	OnlyPeacefulMobs   bool
 	ExplosionsGriefing bool
+	StudentFly         bool // students may fly (teachers always can)
+	StudentCreative    bool // students play in creative mode
 	StaticSpawnpoint   sql.NullString
 	SpawnYaw           sql.NullFloat64
 	SpawnPitch         sql.NullFloat64
@@ -84,12 +86,12 @@ func (s instanceSettings) toLuantiRuntimeSettings() map[string]interface{} {
 func (c *controller) getInstanceSettings(instanceID string) (*instanceSettings, error) {
 	var s instanceSettings
 	err := c.db.QueryRow(`SELECT instance_id, enable_damage, enable_pvp, mcl_enable_hunger,
-		mobs_spawn, only_peaceful_mobs, mcl_explosions_griefing, static_spawnpoint,
-		spawn_yaw, spawn_pitch
+		mobs_spawn, only_peaceful_mobs, mcl_explosions_griefing, student_fly, student_creative,
+		static_spawnpoint, spawn_yaw, spawn_pitch
 		FROM instance_settings WHERE instance_id = ?`, instanceID).Scan(
 		&s.InstanceID, &s.EnableDamage, &s.EnablePVP, &s.EnableHunger,
-		&s.MobsSpawn, &s.OnlyPeacefulMobs, &s.ExplosionsGriefing, &s.StaticSpawnpoint,
-		&s.SpawnYaw, &s.SpawnPitch)
+		&s.MobsSpawn, &s.OnlyPeacefulMobs, &s.ExplosionsGriefing, &s.StudentFly, &s.StudentCreative,
+		&s.StaticSpawnpoint, &s.SpawnYaw, &s.SpawnPitch)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -113,8 +115,9 @@ func (c *controller) getInstanceSettingsOrDefault(instanceID string) (instanceSe
 func (c *controller) saveInstanceSettings(s instanceSettings) error {
 	_, err := c.db.Exec(`INSERT INTO instance_settings
 		(instance_id, enable_damage, enable_pvp, mcl_enable_hunger, mobs_spawn,
-		 only_peaceful_mobs, mcl_explosions_griefing, static_spawnpoint, spawn_yaw, spawn_pitch)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 only_peaceful_mobs, mcl_explosions_griefing, student_fly, student_creative,
+		 static_spawnpoint, spawn_yaw, spawn_pitch)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			enable_damage = VALUES(enable_damage),
 			enable_pvp = VALUES(enable_pvp),
@@ -122,11 +125,13 @@ func (c *controller) saveInstanceSettings(s instanceSettings) error {
 			mobs_spawn = VALUES(mobs_spawn),
 			only_peaceful_mobs = VALUES(only_peaceful_mobs),
 			mcl_explosions_griefing = VALUES(mcl_explosions_griefing),
+			student_fly = VALUES(student_fly),
+			student_creative = VALUES(student_creative),
 			static_spawnpoint = VALUES(static_spawnpoint),
 			spawn_yaw = VALUES(spawn_yaw),
 			spawn_pitch = VALUES(spawn_pitch)`,
 		s.InstanceID, s.EnableDamage, s.EnablePVP, s.EnableHunger, s.MobsSpawn,
-		s.OnlyPeacefulMobs, s.ExplosionsGriefing, nullableString(s.StaticSpawnpoint),
+		s.OnlyPeacefulMobs, s.ExplosionsGriefing, s.StudentFly, s.StudentCreative, nullableString(s.StaticSpawnpoint),
 		nullableFloat(s.SpawnYaw), nullableFloat(s.SpawnPitch))
 	return err
 }
@@ -150,6 +155,38 @@ func boolField(value string) bool {
 	return value == "true" || value == "1" || value == "yes" || value == "on"
 }
 
+// studentAbilitiesMessage tells the bridge what students may do: fly and
+// creative mode. Without "player" it applies to everyone on the server.
+func studentAbilitiesMessage(s instanceSettings, player string) map[string]interface{} {
+	msg := map[string]interface{}{
+		"action":   "set_student_abilities",
+		"fly":      s.StudentFly,
+		"creative": s.StudentCreative,
+	}
+	if player != "" {
+		msg["player"] = player
+	}
+	return msg
+}
+
+// reapplyStudentAbilities sends a world's student abilities to a player who
+// just joined it; the bridge ignores it for staff and spectators.
+func (c *controller) reapplyStudentAbilities(playerName string) {
+	cc := proxy.Find(playerName)
+	if cc == nil || cc.ServerName() == "" || cc.ServerName() == c.cfg.LobbyServer {
+		return
+	}
+	inst, err := c.getInstanceByProxyName(cc.ServerName())
+	if err != nil || inst == nil {
+		return
+	}
+	settings, err := c.getInstanceSettingsOrDefault(inst.ID)
+	if err != nil {
+		return
+	}
+	c.sendToPlayerServer(playerName, studentAbilitiesMessage(settings, playerName))
+}
+
 func (c *controller) sendSettingsToInstance(inst *instanceData, settings instanceSettings) bool {
 	if inst == nil {
 		return false
@@ -162,6 +199,7 @@ func (c *controller) sendSettingsToInstance(inst *instanceData, settings instanc
 	for cc := range proxy.Clts() {
 		if cc.ServerName() == inst.ProxyName {
 			if c.sendToPlayerServer(cc.Name(), msg) {
+				c.sendToPlayerServer(cc.Name(), studentAbilitiesMessage(settings, ""))
 				log.Printf("[%s] sent saved settings for instance %s through %s", pluginName, inst.ID, cc.Name())
 				return true
 			}

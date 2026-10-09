@@ -425,11 +425,28 @@ func (c *controller) zonesMessage(inst *instanceData) (map[string]interface{}, e
 			if g, ok := groups[int(z.GroupID.Int64)]; z.GroupID.Valid && ok && !z.Open {
 				participants = g.Members
 			}
-			entry["mission"] = missionPayload(m, participants)
+			entry["mission"] = missionPayload(m, participants, entry["color"].(string))
 		}
 		payload = append(payload, entry)
 	}
-	return map[string]interface{}{"action": "set_zones", "zones": payload}, nil
+	// World missions: played by their group, or the class.
+	worldMissions, err := c.getWorldMissionList(inst.ID)
+	if err != nil {
+		return nil, err
+	}
+	global := make([]map[string]interface{}, 0)
+	for i := range worldMissions {
+		m := &worldMissions[i]
+		if !m.global() {
+			continue
+		}
+		participants, color := classStudents, worldMissionColor
+		if g, ok := groups[m.GroupID]; m.GroupID != 0 && ok {
+			participants, color = g.Members, g.Color
+		}
+		global = append(global, missionPayload(m, participants, color))
+	}
+	return map[string]interface{}{"action": "set_zones", "zones": payload, "missions": global}, nil
 }
 
 // pushZones sends the world's zones through any player currently on it.

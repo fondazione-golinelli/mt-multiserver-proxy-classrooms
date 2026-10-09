@@ -210,6 +210,33 @@ func migrateDB(db *sql.DB) error {
 		"ALTER TABLE instance_settings ADD COLUMN spawn_pitch DOUBLE DEFAULT NULL AFTER spawn_yaw"); err != nil {
 		return err
 	}
+	for _, col := range []string{"student_fly", "student_creative"} {
+		if err := addColumnIfMissing(db, "instance_settings", col,
+			"ALTER TABLE instance_settings ADD COLUMN "+col+" TINYINT(1) NOT NULL DEFAULT 0"); err != nil {
+			return err
+		}
+	}
+	// World missions: zone_id NULL, bound to the world (and optionally a group).
+	if err := addColumnIfMissing(db, "zone_missions", "instance_id",
+		`ALTER TABLE zone_missions ADD COLUMN instance_id VARCHAR(100) DEFAULT NULL AFTER zone_id,
+			ADD CONSTRAINT fk_zone_missions_instance FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(db, "zone_missions", "group_id",
+		`ALTER TABLE zone_missions ADD COLUMN group_id INT DEFAULT NULL AFTER instance_id,
+			ADD CONSTRAINT fk_zone_missions_group FOREIGN KEY (group_id) REFERENCES class_groups(id) ON DELETE SET NULL`); err != nil {
+		return err
+	}
+	var zoneNullable string
+	if err := db.QueryRow(`SELECT IS_NULLABLE FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'zone_missions' AND COLUMN_NAME = 'zone_id'`).Scan(&zoneNullable); err != nil {
+		return fmt.Errorf("check column zone_missions.zone_id: %w", err)
+	}
+	if zoneNullable != "YES" {
+		if _, err := db.Exec("ALTER TABLE zone_missions MODIFY zone_id INT NULL DEFAULT NULL"); err != nil {
+			return fmt.Errorf("migrate column zone_missions.zone_id: %w", err)
+		}
+	}
 
 	log.Printf("[%s] database migration complete", pluginName)
 	return nil

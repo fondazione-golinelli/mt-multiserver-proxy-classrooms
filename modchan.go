@@ -180,7 +180,16 @@ func (c *controller) registerJoinLeave() {
 func (c *controller) reapplyStates(playerName string) {
 	c.reapplyTeacherContext(playerName)
 	c.reapplyPortalVisitorContext(playerName)
+	c.reapplyStudentAbilities(playerName)
 	c.reapplyZones(playerName)
+	// The "Class worlds" item belongs to the HUB only.
+	if cc := proxy.Find(playerName); cc != nil && cc.ServerName() != "" {
+		c.sendToPlayerServer(playerName, map[string]interface{}{
+			"action": "set_hub",
+			"player": playerName,
+			"hub":    cc.ServerName() == c.cfg.LobbyServer,
+		})
+	}
 
 	if c.isFrozen(playerName) {
 		c.sendToPlayerServer(playerName, map[string]string{

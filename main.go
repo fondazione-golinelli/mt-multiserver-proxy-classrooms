@@ -143,6 +143,9 @@ type runtimeState struct {
 	missionCatalogs      map[string]missionCatalog   // instance ID -> catalog reported by the bridge
 	missionProgress      map[int]missionProgress     // mission ID -> last progress report
 	missionDrafts        map[string]*missionDraft    // teacher -> mission being composed
+	missionView          map[string]int              // teacher -> mission shown in the editor (0 = new)
+	worldToolsTab        map[string]string           // teacher -> World Tools tab
+	newMissionPick       map[string][2]int           // teacher -> Missions tab "Where" and "Played by" choices
 }
 
 func newRuntimeState() runtimeState {
@@ -168,6 +171,9 @@ func newRuntimeState() runtimeState {
 		missionCatalogs:      make(map[string]missionCatalog),
 		missionProgress:      make(map[int]missionProgress),
 		missionDrafts:        make(map[string]*missionDraft),
+		missionView:          make(map[string]int),
+		worldToolsTab:        make(map[string]string),
+		newMissionPick:       make(map[string][2]int),
 	}
 }
 

@@ -644,28 +644,32 @@ func (c *controller) showInstanceSettings(cc *proxy.ClientConn, instanceID strin
 	instanceFrame(&b, inst, instTabRules)
 
 	// Players.
-	b.WriteString(box(0.3, 2.15, 5.1, 2.5, colorCard))
+	b.WriteString(box(0.3, 2.15, 5.1, 3.15, colorCard))
 	b.WriteString(sectionTitle(0.55, 2.45, "Players"))
-	settingRow(&b, 0.55, 3.0, iconHeart, "setting_damage", "Can get hurt",
+	settingRow(&b, 0.55, 2.95, iconHeart, "setting_damage", "Can get hurt",
 		"Players lose health from falls, lava, mobs... Off = nobody can get hurt.", settings.EnableDamage)
-	settingRow(&b, 0.55, 3.55, iconPvP, "setting_pvp", "Can hit each other (PvP)",
+	settingRow(&b, 0.55, 3.45, iconPvP, "setting_pvp", "Can hit each other (PvP)",
 		"Players can damage other players. Needs 'Can get hurt'.", settings.EnablePVP)
-	settingRow(&b, 0.55, 4.1, "", "setting_hunger", "Hunger",
+	settingRow(&b, 0.55, 3.95, "", "setting_hunger", "Hunger",
 		"Players need to eat. Needs 'Can get hurt'. Applies after a restart.", settings.EnableHunger)
+	settingRow(&b, 0.55, 4.45, "", "setting_student_fly", "Students can fly",
+		"Students may fly (K to toggle). Teachers always can. Applies at once.", settings.StudentFly)
+	settingRow(&b, 0.55, 4.95, "", "setting_student_creative", "Student creative mode",
+		"Students get unlimited blocks and items and break blocks instantly. Applies at once.", settings.StudentCreative)
 
 	// World.
-	b.WriteString(box(5.6, 2.15, 5.1, 2.5, colorCard))
+	b.WriteString(box(5.6, 2.15, 5.1, 3.15, colorCard))
 	b.WriteString(sectionTitle(5.85, 2.45, "World"))
-	settingRow(&b, 5.85, 3.0, "", "setting_mobs", "Animals & mobs spawn",
+	settingRow(&b, 5.85, 2.95, "", "setting_mobs", "Animals & mobs spawn",
 		"Creatures spawn naturally. Applies after a restart.", settings.MobsSpawn)
-	settingRow(&b, 5.85, 3.55, "", "setting_peaceful", "Only peaceful mobs",
+	settingRow(&b, 5.85, 3.45, "", "setting_peaceful", "Only peaceful mobs",
 		"No hostile monsters (zombies, creepers...). Applies after a restart.", settings.OnlyPeacefulMobs)
-	settingRow(&b, 5.85, 4.1, "", "setting_explosions", "Explosions break blocks",
+	settingRow(&b, 5.85, 3.95, "", "setting_explosions", "Explosions break blocks",
 		"TNT and creepers destroy builds. Applies after a restart.", settings.ExplosionsGriefing)
 
 	// Spawn point.
-	b.WriteString(box(0.3, 4.85, 10.4, 1.5, colorCard))
-	b.WriteString(sectionTitle(0.55, 5.15, "Arrival point"))
+	b.WriteString(box(0.3, 5.45, 10.4, 1.4, colorCard))
+	b.WriteString(sectionTitle(0.55, 5.75, "Arrival point"))
 	spawn := "Not set (default spawn)"
 	if settings.StaticSpawnpoint.Valid && strings.TrimSpace(settings.StaticSpawnpoint.String) != "" {
 		spawn = settings.StaticSpawnpoint.String
@@ -673,35 +677,35 @@ func (c *controller) showInstanceSettings(cc *proxy.ClientConn, instanceID strin
 			spawn += fmt.Sprintf("  facing %.0f°", math.Mod(settings.SpawnYaw.Float64*180/math.Pi+360, 360))
 		}
 	}
-	b.WriteString(coloredLbl(0.55, 5.65, light, spawn))
-	b.WriteString(hint(0.55, 6.05, "Where players appear when they join. Applies after a restart."))
+	b.WriteString(coloredLbl(0.55, 6.2, light, spawn))
+	b.WriteString(hint(0.55, 6.55, "Where players appear when they join. Applies after a restart."))
 	if cc.ServerName() == inst.ProxyName {
-		b.WriteString(styledBtn(7.3, 5.3, 3.2, 0.65, "btn_capture_spawn", "Use my position", colorPrimary))
+		b.WriteString(styledBtn(7.3, 5.85, 3.2, 0.65, "btn_capture_spawn", "Use my position", colorPrimary))
 		b.WriteString(tooltip("btn_capture_spawn", "Saves where you stand and the direction you look"))
 	} else {
-		b.WriteString(hint(7.0, 5.5, "Join the world to set it."))
+		b.WriteString(hint(7.0, 6.05, "Join the world to set it."))
 	}
 
 	// Apply / restart banner.
 	if c.isRestartPending(inst.ID) {
-		b.WriteString(box(0.3, 6.55, 10.4, 1.5, "#4a3a12"))
-		b.WriteString(fmt.Sprintf("image[0.55,6.75;0.5,0.5;%s]", iconWarning))
-		b.WriteString(coloredLbl(1.25, 7.0, warning, "Some changes apply after a restart."))
-		b.WriteString(hint(1.25, 7.5, "Players are brought back automatically."))
+		b.WriteString(box(0.3, 7.0, 10.4, 1.35, "#4a3a12"))
+		b.WriteString(fmt.Sprintf("image[0.55,7.15;0.5,0.5;%s]", iconWarning))
+		b.WriteString(coloredLbl(1.25, 7.4, warning, "Some changes apply after a restart."))
+		b.WriteString(hint(1.25, 7.9, "Players are brought back automatically."))
 		if inst.Status == "running" {
-			b.WriteString(styledBtn(7.6, 6.95, 2.9, 0.7, "btn_restart_instance", "Restart now", colorActive))
+			b.WriteString(styledBtn(7.6, 7.32, 2.9, 0.7, "btn_restart_instance", "Restart now", colorActive))
 		} else {
-			b.WriteString(hint(7.0, 7.0, "Start the world to apply."))
+			b.WriteString(hint(7.0, 7.65, "Start the world to apply."))
 		}
 	} else {
-		b.WriteString(box(0.3, 6.55, 10.4, 1.5, colorCard))
-		b.WriteString(fmt.Sprintf("image[0.55,6.85;0.42,0.42;%s]", iconCheck))
-		b.WriteString(hint(1.25, 7.05, "Changes are saved as soon as you click."))
-		b.WriteString(hint(1.25, 7.5, "Hurt and PvP apply at once; the rest after a restart."))
+		b.WriteString(box(0.3, 7.0, 10.4, 1.35, colorCard))
+		b.WriteString(fmt.Sprintf("image[0.55,7.25;0.42,0.42;%s]", iconCheck))
+		b.WriteString(hint(1.25, 7.45, "Changes are saved as soon as you click."))
+		b.WriteString(hint(1.25, 7.9, "Hurt, PvP, flying, creative: at once. Others: after a restart."))
 	}
 
-	b.WriteString(btn(0.3, 8.35, 4.5, 0.7, "btn_reset_settings", "Reset to classroom-safe"))
-	b.WriteString(tooltip("btn_reset_settings", "No damage, PvP or hunger; peaceful mobs only; explosions keep blocks"))
+	b.WriteString(btn(0.3, 8.6, 4.5, 0.7, "btn_reset_settings", "Reset to classroom-safe"))
+	b.WriteString(tooltip("btn_reset_settings", "No damage, PvP or hunger; peaceful mobs only; explosions keep blocks; students can't fly, survival mode"))
 
 	cc.ShowFormspec("classrooms:instance_settings", b.String())
 }
@@ -930,12 +934,15 @@ const (
 	peopleTabTeachers   = "tab_teachers"
 )
 
+// Students and Groups use the large two-column frame.
+const peopleWideW, peopleWideH = 17.0, 11.6
+
 func (c *controller) peopleFrame(b *strings.Builder, cc *proxy.ClientConn, cls *classData, activeTab string) {
-	c.peopleFrameWidth(b, cc, cls, activeTab, 9)
+	c.peopleFrameSize(b, cc, cls, activeTab, 9, 9.6)
 }
 
-func (c *controller) peopleFrameWidth(b *strings.Builder, cc *proxy.ClientConn, cls *classData, activeTab string, w float64) {
-	fsOpen(b, w, 9.6)
+func (c *controller) peopleFrameSize(b *strings.Builder, cc *proxy.ClientConn, cls *classData, activeTab string, w, h float64) {
+	fsOpen(b, w, h)
 	fsHeader(b, w, "People", cls.Name, true, true)
 	tabs := [][2]string{{peopleTabStudents, "Students"}}
 	if c.canManageClass(cls.ID, cc.Name()) {
@@ -968,6 +975,8 @@ func personList(b *strings.Builder, y, h float64, names []string, removePrefix, 
 	b.WriteString("scroll_container_end[]")
 }
 
+// showStudentEditor: adding options on the left, the searchable class list
+// (with each student's group) on the right.
 func (c *controller) showStudentEditor(cc *proxy.ClientConn, classID int) {
 	cls, _ := c.getClassByID(classID)
 	if cls == nil || !c.canEditClassStudents(classID, cc.Name()) {
@@ -975,31 +984,108 @@ func (c *controller) showStudentEditor(cc *proxy.ClientConn, classID int) {
 		return
 	}
 	students, _ := c.getStudents(classID)
+	groups, _ := c.getGroups(classID)
+	byStudent := groupByStudent(groups)
+	view := c.studentList(cc.Name(), classID)
 
 	var b strings.Builder
-	c.peopleFrame(&b, cc, cls, peopleTabStudents)
+	c.peopleFrameSize(&b, cc, cls, peopleTabStudents, peopleWideW, peopleWideH)
 
-	b.WriteString(box(0.3, 2.05, 8.4, 1.25, colorCard))
-	b.WriteString(sectionTitle(0.55, 2.3, "Add a player who already has an account"))
-	b.WriteString("field[0.55,2.55;5.6,0.55;add_student_name;;]")
+	// ── Left: add students ──
+	b.WriteString(box(0.3, 2.05, 6.6, 2.05, colorCard))
+	b.WriteString(fmt.Sprintf("image[0.55,2.2;0.42,0.42;%s]", iconPlus))
+	b.WriteString(sectionTitle(1.1, 2.42, "Add an existing player"))
+	b.WriteString(hint(0.55, 2.85, "Type the username they log in with."))
+	b.WriteString("field[0.55,3.15;4.25,0.65;add_student_name;;]")
 	b.WriteString("field_close_on_enter[add_student_name;false]")
-	b.WriteString(styledBtn(6.35, 2.55, 2.1, 0.55, "btn_add_student", "+ Add", colorPrimary))
+	b.WriteString(styledBtn(4.95, 3.15, 1.7, 0.65, "btn_add_student", "+ Add", colorPrimary))
 
-	listY, listHeight := 3.85, 5.55
+	statsTop := 4.3
 	if c.canManageClass(classID, cc.Name()) {
-		b.WriteString(box(0.3, 3.45, 8.4, 2.65, colorCard))
-		b.WriteString(sectionTitle(0.55, 3.7, "Or create a new account"))
-		b.WriteString("field[0.55,4.4;3.9,0.55;new_student_name;Username;]")
-		b.WriteString("pwdfield[0.55,5.35;3.9,0.55;new_student_password;Password (8+ characters)]")
-		b.WriteString("pwdfield[4.6,5.35;3.85,0.55;new_student_confirm;Repeat password]")
-		b.WriteString(styledBtn(4.6, 4.4, 3.85, 0.55, "btn_create_student", "Create and add", colorPrimary))
+		b.WriteString(box(0.3, 4.3, 6.6, 4.35, colorCard))
+		b.WriteString(fmt.Sprintf("image[0.55,4.45;0.42,0.42;%s]", iconPlayer))
+		b.WriteString(sectionTitle(1.1, 4.67, "Create a new account"))
+		b.WriteString(hint(0.55, 5.1, "For students who have never played here."))
+		b.WriteString("field[0.55,5.75;6.1,0.65;new_student_name;Username;]")
+		b.WriteString("pwdfield[0.55,6.85;2.97,0.65;new_student_password;Password (8+ chars)]")
+		b.WriteString("pwdfield[3.68,6.85;2.97,0.65;new_student_confirm;Repeat password]")
+		b.WriteString(styledBtn(0.55, 7.75, 6.1, 0.7, "btn_create_student", "Create and add to the class", colorPrimary))
 		for _, field := range []string{"new_student_name", "new_student_password", "new_student_confirm"} {
 			b.WriteString("field_close_on_enter[" + field + ";false]")
 		}
-		listY, listHeight = 6.6, 2.85
+		statsTop = 8.85
 	}
-	b.WriteString(sectionTitle(0.45, listY-0.2, fmt.Sprintf("In this class (%d)", len(students))))
-	personList(&b, listY, listHeight-0.1, students, "rm_student_", "Remove from class:")
+
+	// Class summary.
+	online, grouped := 0, 0
+	for _, s := range students {
+		if proxy.Find(s) != nil {
+			online++
+		}
+		if _, ok := byStudent[s]; ok {
+			grouped++
+		}
+	}
+	b.WriteString(box(0.3, statsTop, 6.6, 11.3-statsTop, colorCard))
+	b.WriteString(sectionTitle(0.55, statsTop+0.3, "This class"))
+	lines := []string{plural(len(students), "student", "students"), fmt.Sprintf("%d online now", online)}
+	if len(groups) > 0 {
+		lines = append(lines, fmt.Sprintf("%s · %d without a group", plural(len(groups), "group", "groups"), len(students)-grouped))
+	}
+	for i, line := range lines {
+		if statsTop+0.75+float64(i)*0.45 > 11.1 {
+			break
+		}
+		b.WriteString(coloredLbl(0.55, statsTop+0.75+float64(i)*0.45, light, line))
+	}
+
+	// ── Right: the class list ──
+	b.WriteString(box(7.1, 2.05, 9.6, 9.25, colorCard))
+	b.WriteString(sectionTitle(7.35, 2.35, fmt.Sprintf("In this class (%d)", len(students))))
+	b.WriteString(fmt.Sprintf("field[7.35,2.6;5.6,0.6;stu_search;;%s]", fmtEsc(view.PeopleSearch)))
+	b.WriteString("field_close_on_enter[stu_search;false]")
+	b.WriteString(tooltip("stu_search", "Search by name, then press Enter"))
+	b.WriteString(iconBtn(13.05, 2.6, 0.6, "stu_search_go", iconSearch, "Search"))
+	b.WriteString(iconBtn(13.75, 2.6, 0.6, "stu_search_clear", iconClose, "Clear the search"))
+
+	shown := filterStudents(students, byStudent, "all", view.PeopleSearch)
+	if view.PeopleSearch != "" {
+		b.WriteString(hint(14.5, 2.9, fmt.Sprintf("%d of %d", len(shown), len(students))))
+	}
+	if len(shown) == 0 {
+		msg := "No students match the search."
+		if len(students) == 0 {
+			msg = "No students yet: add them on the left."
+		}
+		b.WriteString(hint(7.4, 3.75, msg))
+	}
+	const listTop, listH, rowStep = 3.4, 7.75, 0.75
+	b.WriteString(scrollbarAt("scr_people_students", 16.35, listTop, listH, len(shown), rowStep, 0.05, view.Scroll["scr_people_students"]))
+	b.WriteString(fmt.Sprintf("scroll_container[7.25,%g;9.0,%g;scr_people_students;vertical;0.1]", listTop, listH))
+	ry := 0.05
+	for _, s := range shown {
+		b.WriteString(box(0, ry, 8.95, 0.68, colorRow))
+		dot, state := muted, "offline"
+		if proxy.Find(s) != nil {
+			dot, state = success, "online"
+		}
+		b.WriteString(statusDot(0.2, ry+0.23, dot))
+		b.WriteString(fmt.Sprintf("label[0.6,%g;%s]", ry+0.34, fmtEsc(s)))
+		b.WriteString(fmt.Sprintf("label[3.9,%g;%s]", ry+0.34, fmtEsc(mcColorize(muted, state))))
+		if g, ok := byStudent[s]; ok {
+			b.WriteString(box(5.2, ry+0.23, 0.22, 0.22, g.Color))
+			name := []rune(g.Name)
+			if len(name) > 16 {
+				name = append(name[:15], '…')
+			}
+			b.WriteString(fmt.Sprintf("label[5.55,%g;%s]", ry+0.34, fmtEsc(mcColorize(g.Color, string(name)))))
+		} else if len(groups) > 0 {
+			b.WriteString(fmt.Sprintf("label[5.55,%g;%s]", ry+0.34, fmtEsc(mcColorize(muted, "no group"))))
+		}
+		b.WriteString(iconBtn(8.3, ry+0.09, 0.5, "rm_student_"+s, iconClose, "Remove from class: "+s))
+		ry += rowStep
+	}
+	b.WriteString("scroll_container_end[]")
 
 	cc.ShowFormspec("classrooms:students", b.String())
 }

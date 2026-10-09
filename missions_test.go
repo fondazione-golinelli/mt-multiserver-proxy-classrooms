@@ -18,7 +18,7 @@ func TestMissionHelpers(t *testing.T) {
 	if toolsText(nil) != "none" || toolsText([]missionTool{{Label: "Hoe", Count: 1}, {Label: "Seeds", Count: 16}}) != "Hoe ×1, Seeds ×16" {
 		t.Fatal("tools text")
 	}
-	p := missionPayload(&missionData{ID: 3, Title: "Farm", Goals: []missionGoal{{Type: "blocks", Key: "water", Count: 20}}}, nil)
+	p := missionPayload(&missionData{ID: 3, Title: "Farm", Goals: []missionGoal{{Type: "blocks", Key: "water", Count: 20}}}, nil, "#e05252")
 	if p["id"] != 3 || len(p["participants"].([]string)) != 0 || len(p["objectives"].([]map[string]interface{})) != 1 {
 		t.Fatalf("payload %v", p)
 	}
@@ -52,5 +52,38 @@ func TestMissionMerging(t *testing.T) {
 	}
 	if _, ok := addGoal(goals, missionGoal{Type: "animals", Key: "zz", Count: 1}, 999); ok || len(goals) != maxMissionGoals {
 		t.Fatalf("goal limit not enforced: %d", len(goals))
+	}
+}
+
+func TestWorldMissionHelpers(t *testing.T) {
+	zones := []zoneData{{ID: 1, Name: "Farm"}, {ID: 2, Name: "Lake"}}
+	labels, ids := newMissionPlaces(zones, map[int]*missionData{1: {ID: 9, ZoneID: 1}})
+	if len(labels) != 2 || labels[0] != "Whole world" || labels[1] != "Zone: Lake" || ids[0] != 0 || ids[1] != 2 {
+		t.Fatalf("places: %v %v", labels, ids)
+	}
+	animals := []missionGoal{{Type: "animals", Label: "Cow", Count: 4}}
+	if needsChest(animals, false) || !needsChest(animals, true) {
+		t.Fatal("world missions count animals around the chest")
+	}
+	collect := []missionGoal{{Type: "collect", Label: "Coal", Count: 5}}
+	if needsChest(collect, true) || !needsChest([]missionGoal{{Type: "deliver"}}, false) {
+		t.Fatal("gathering needs no chest, deliveries do")
+	}
+	if got := goalTextFor(animals[0], true); got != "4 × Cow near the chest" {
+		t.Fatalf("world goal text: %q", got)
+	}
+	if got := goalTextFor(collect[0], false); got != "Gather 5 Coal" {
+		t.Fatalf("collect text: %q", got)
+	}
+	if catalogKind("collect") != "deliver" || catalogKind("blocks") != "blocks" {
+		t.Fatal("gather goals pick from the item catalog")
+	}
+	m := &missionData{ID: 3, Title: "Mine", Goals: collect}
+	if p := missionPayload(m, nil, worldMissionColor); p["global"] != true {
+		t.Fatalf("world mission payload: %v", p)
+	}
+	d := draftFromMission(&missionData{ID: 7, GroupID: 4, Title: "T", Goals: collect})
+	if d.EditingID != 7 || d.GroupID != 4 || !d.global() || &d.Goals[0] == &collect[0] {
+		t.Fatalf("draft from mission: %+v", d)
 	}
 }
