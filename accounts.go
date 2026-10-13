@@ -19,13 +19,13 @@ var accountNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,20}$`)
 
 func validateAccountInput(name, password, confirmation string) string {
 	if !accountNamePattern.MatchString(name) || name == "singleplayer" {
-		return "Username must contain 1-20 letters, digits, underscores or hyphens; singleplayer is reserved."
+		return T("Username must contain 1-20 letters, digits, underscores or hyphens; singleplayer is reserved.")
 	}
 	if !utf8.ValidString(password) || utf8.RuneCountInString(password) < 8 || utf8.RuneCountInString(password) > 128 {
-		return "Password must contain 8-128 characters."
+		return T("Password must contain 8-128 characters.")
 	}
 	if password != confirmation {
-		return "Passwords do not match."
+		return T("Passwords do not match.")
 	}
 	return ""
 }
@@ -36,25 +36,25 @@ func registerStudentAccount(auth proxy.AuthBackend, name, password, confirmation
 	}
 	creator, ok := auth.(accountCreator)
 	if !ok {
-		return "Account creation is unavailable. Update the proxy or its authentication backend."
+		return T("Account creation is unavailable. Update the proxy or its authentication backend.")
 	}
 	if auth.Exists(name) {
-		return "This account already exists. Use Add to assign it without changing its password."
+		return T("This account already exists. Use Add to assign it without changing its password.")
 	}
 	// Luanti lowercases the SRP identity, while preserving the login name.
 	salt, verifier, err := srp.NewClient([]byte(strings.ToLower(name)), []byte(password))
 	if err != nil {
-		return "Unable to generate account credentials."
+		return T("Unable to generate account credentials.")
 	}
 	if err := creator.CreateAccount(name, salt, verifier); err != nil {
-		return "Account creation failed or the username is already taken. No existing password was changed."
+		return T("Account creation failed or the username is already taken. No existing password was changed.")
 	}
 	return ""
 }
 
 func (c *controller) createStudentAccount(classID int, actor, name, password, confirmation string) string {
 	if !c.canManageClass(classID, actor) {
-		return "Only class teachers and administrators can create accounts."
+		return T("Only class teachers and administrators can create accounts.")
 	}
 	if msg := validateAccountInput(name, password, confirmation); msg != "" {
 		return msg
@@ -68,7 +68,7 @@ func (c *controller) createStudentAccount(classID int, actor, name, password, co
 	if ok, _ := c.addStudent(classID, name); !ok {
 		// Authentication and class membership use separate stores. Keep the account
 		// and report partial success, so the teacher can retry the existing Add flow.
-		return "Account created, but assignment failed. Use Add with this username to retry; the password is already set."
+		return T("Account created, but assignment failed. Use Add with this username to retry; the password is already set.")
 	}
-	return "Account created and student added to the class."
+	return T("Account created and student added to the class.")
 }

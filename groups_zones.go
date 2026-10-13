@@ -68,9 +68,9 @@ type zoneEdit struct {
 // zoneAccessOptions lists the "who can build" dropdown entries; indexes are
 // 1-based as returned by the dropdown.
 func zoneAccessOptions(groups []classGroup) []string {
-	options := []string{"Teachers only", "Everyone"}
+	options := []string{T("Teachers only"), T("Everyone")}
 	for _, g := range groups {
-		options = append(options, "Group: "+g.Name)
+		options = append(options, T("Group: @1", g.Name))
 	}
 	return options
 }
@@ -78,12 +78,12 @@ func zoneAccessOptions(groups []classGroup) []string {
 func zoneAccessFromIndex(idx int, groups []classGroup) (zoneAccess, string, bool) {
 	switch {
 	case idx == 1:
-		return zoneAccess{}, "Teachers only", true
+		return zoneAccess{}, T("Teachers only"), true
 	case idx == 2:
-		return zoneAccess{Open: true}, "Everyone", true
+		return zoneAccess{Open: true}, T("Everyone"), true
 	case idx >= 3 && idx-3 < len(groups):
 		g := groups[idx-3]
-		return zoneAccess{GroupID: g.ID}, "Group: " + g.Name, true
+		return zoneAccess{GroupID: g.ID}, T("Group: @1", g.Name), true
 	}
 	return zoneAccess{}, "", false
 }
@@ -180,19 +180,19 @@ func (c *controller) getGroup(classID, groupID int) (*classGroup, error) {
 func (c *controller) createGroup(classID int, name string) (bool, string) {
 	name = cleanShortName(name, 30)
 	if name == "" {
-		return false, "Type a name for the group."
+		return false, T("Type a name for the group.")
 	}
 	groups, err := c.getGroups(classID)
 	if err != nil {
-		return false, "Could not load groups."
+		return false, T("Could not load groups.")
 	}
 	if len(groups) >= maxGroupsPerClass {
-		return false, fmt.Sprintf("A class can have at most %d groups.", maxGroupsPerClass)
+		return false, T("A class can have at most @1 groups.", maxGroupsPerClass)
 	}
 	used := map[string]bool{}
 	for _, g := range groups {
 		if strings.EqualFold(g.Name, name) {
-			return false, "A group with that name already exists."
+			return false, T("A group with that name already exists.")
 		}
 		used[g.Color] = true
 	}
@@ -205,9 +205,9 @@ func (c *controller) createGroup(classID int, name string) (bool, string) {
 	}
 	if _, err := c.db.Exec("INSERT INTO class_groups (class_id, name, color) VALUES (?, ?, ?)",
 		classID, name, color); err != nil {
-		return false, "Could not create the group."
+		return false, T("Could not create the group.")
 	}
-	return true, "Group " + name + " created."
+	return true, T("Group @1 created.", name)
 }
 
 func (c *controller) deleteGroup(classID, groupID int) {
@@ -300,11 +300,11 @@ func (c *controller) validateZoneAccess(inst *instanceData, access zoneAccess) (
 		return nil, ""
 	}
 	if inst.ClassID == nil {
-		return nil, "Group zones need a class world."
+		return nil, T("Group zones need a class world.")
 	}
 	g, err := c.getGroup(*inst.ClassID, access.GroupID)
 	if err != nil || g == nil {
-		return nil, "That group no longer exists."
+		return nil, T("That group no longer exists.")
 	}
 	return access.GroupID, ""
 }
@@ -316,7 +316,7 @@ func (c *controller) updateZoneAccess(inst *instanceData, zoneID int, access zon
 	}
 	if _, err := c.db.Exec("UPDATE instance_zones SET open_access = ?, group_id = ? WHERE id = ? AND instance_id = ?",
 		access.Open, group, zoneID, inst.ID); err != nil {
-		return "Could not change the zone."
+		return T("Could not change the zone.")
 	}
 	c.pushZones(inst)
 	return ""
@@ -325,14 +325,14 @@ func (c *controller) updateZoneAccess(inst *instanceData, zoneID int, access zon
 func (c *controller) createZone(inst *instanceData, name string, access zoneAccess, a, b, tp [3]float64, yaw float64) (bool, string) {
 	zones, err := c.getZones(inst.ID)
 	if err != nil {
-		return false, "Could not load zones."
+		return false, T("Could not load zones.")
 	}
 	name = cleanShortName(name, 30)
 	if name == "" {
 		name = fmt.Sprintf("Zone %d", len(zones)+1)
 	}
 	if len(zones) >= maxZonesPerWorld {
-		return false, fmt.Sprintf("A world can have at most %d zones.", maxZonesPerWorld)
+		return false, T("A world can have at most @1 zones.", maxZonesPerWorld)
 	}
 	round := func(v float64) int {
 		if v < 0 {
@@ -349,7 +349,7 @@ func (c *controller) createZone(inst *instanceData, name string, access zoneAcce
 		minZ, maxZ = maxZ, minZ
 	}
 	if maxX-minX+1 > zoneMaxSide || maxZ-minZ+1 > zoneMaxSide {
-		return false, fmt.Sprintf("A zone can be at most %d blocks per side.", zoneMaxSide)
+		return false, T("A zone can be at most @1 blocks per side.", zoneMaxSide)
 	}
 	group, msg := c.validateZoneAccess(inst, access)
 	if msg != "" {
@@ -359,10 +359,10 @@ func (c *controller) createZone(inst *instanceData, name string, access zoneAcce
 		(instance_id, name, group_id, open_access, min_x, min_z, max_x, max_z, tp_x, tp_y, tp_z, tp_yaw)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		inst.ID, name, group, access.Open, minX, minZ, maxX, maxZ, tp[0], tp[1], tp[2], yaw); err != nil {
-		return false, "Could not save the zone."
+		return false, T("Could not save the zone.")
 	}
 	c.pushZones(inst)
-	return true, "Zone " + name + " created."
+	return true, T("Zone @1 created.", name)
 }
 
 func (c *controller) deleteZone(inst *instanceData, zoneID int) {
@@ -511,10 +511,10 @@ func (z zoneData) teleportPoint() (x, y, z2, yaw float64, ok bool) {
 func (c *controller) teleportToZone(cc *proxy.ClientConn, inst *instanceData, z zoneData, names []string) (int, string) {
 	x, y, zz, yaw, ok := z.teleportPoint()
 	if !ok {
-		return 0, "This zone has no teleport point."
+		return 0, T("This zone has no teleport point.")
 	}
 	if cc.ServerName() != inst.ProxyName {
-		return 0, "Join this world first."
+		return 0, T("Join this world first.")
 	}
 	var targets []string
 	hopped := false
@@ -530,7 +530,7 @@ func (c *controller) teleportToZone(cc *proxy.ClientConn, inst *instanceData, z 
 		}
 	}
 	if len(targets) == 0 {
-		return 0, "Nobody to teleport: nobody is online."
+		return 0, T("Nobody to teleport: nobody is online.")
 	}
 	msg := map[string]interface{}{
 		"action":  "tp_pos",
@@ -557,7 +557,7 @@ func (c *controller) startZoneEdit(cc *proxy.ClientConn, inst *instanceData, nam
 	c.runtime.zoneEdits[cc.Name()] = zoneEdit{InstanceID: inst.ID, Name: name, Access: access}
 	c.mu.Unlock()
 	if strings.TrimSpace(name) == "" {
-		name = "New zone"
+		name = T("New zone")
 	}
 	c.sendToPlayerServer(cc.Name(), map[string]interface{}{
 		"action": "zone_edit_start",
@@ -591,14 +591,14 @@ func (c *controller) handleZoneEditDone(cc *proxy.ClientConn, data map[string]in
 	}
 	inst, err := c.getInstanceByID(edit.InstanceID)
 	if err != nil || inst == nil || inst.ProxyName != cc.ServerName() || !c.canManageInstance(inst, cc.Name()) {
-		c.notify(cc, "The zone could not be saved: you are no longer in that world.")
+		c.notify(cc, T("The zone could not be saved: you are no longer in that world."))
 		return
 	}
 	p1, ok1 := vec3(data, "p1")
 	p2, ok2 := vec3(data, "p2")
 	tp, okTP := vec3(data, "tp")
 	if !ok1 || !ok2 {
-		c.notify(cc, "The zone could not be saved: corners are missing.")
+		c.notify(cc, T("The zone could not be saved: corners are missing."))
 		return
 	}
 	if !okTP {

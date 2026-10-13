@@ -58,11 +58,11 @@ func (c *controller) onChatMsg(cc *proxy.ClientConn, msg string) string {
 		if len(parts) >= 2 {
 			serverName := parts[1]
 			if cc.ServerName() == serverName {
-				cc.SendChatMsg("[Classrooms] You are already on that server.")
+				cc.SendChatMsg("[Classrooms] " + T("You are already on that server."))
 				return ""
 			}
 			if !c.isAllowedToHop(cc.Name(), serverName) {
-				cc.SendChatMsg("[Classrooms] You are not permitted to join this instance.")
+				cc.SendChatMsg("[Classrooms] " + T("You are not permitted to join this instance."))
 				return ""
 			}
 			// Success! Re-apply states after hop.

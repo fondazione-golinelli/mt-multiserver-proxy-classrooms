@@ -8,7 +8,7 @@ import (
 func TestZoneAccessRoundTrip(t *testing.T) {
 	groups := []classGroup{{ID: 7, Name: "Red"}, {ID: 9, Name: "Blue"}}
 	options := zoneAccessOptions(groups)
-	if len(options) != 4 || options[0] != "Teachers only" || options[1] != "Everyone" || options[3] != "Group: Blue" {
+	if len(options) != 4 || options[0] != T("Teachers only") || options[1] != T("Everyone") || options[3] != T("Group: @1", "Blue") {
 		t.Fatalf("unexpected options %v", options)
 	}
 

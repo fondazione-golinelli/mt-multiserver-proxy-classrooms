@@ -76,7 +76,7 @@ func (c *controller) registerCommands() {
 
 func (c *controller) handleClassesCmd(cc *proxy.ClientConn, args ...string) string {
 	if !c.hasClassPanelAccess(cc.Name()) {
-		return "You do not have access to the class panel."
+		return T("You do not have access to the class panel.")
 	}
 	c.showPanelHome(cc)
 	return ""
@@ -90,62 +90,62 @@ func (c *controller) handleAdminCmd(cc *proxy.ClientConn, args ...string) string
 
 func (c *controller) handleLobbyCmd(cc *proxy.ClientConn, args ...string) string {
 	if c.cfg.LobbyServer == "" {
-		return "Lobby not configured."
+		return T("Lobby not configured.")
 	}
 	if cc.ServerName() == c.cfg.LobbyServer {
-		return "You are already in the lobby."
+		return T("You are already in the lobby.")
 	}
 	if err := c.hopPlayer(cc, c.cfg.LobbyServer); err != nil {
-		return "Failed to hop to lobby: " + err.Error()
+		return T("Failed to hop to lobby: @1", err.Error())
 	}
 	return ""
 }
 
 func (c *controller) handleTeacherAddCmd(cc *proxy.ClientConn, args ...string) string {
 	if len(args) < 1 {
-		return "Usage: >teacher_add <username>"
+		return T("Usage: >teacher_add <username>")
 	}
 	name := args[0]
 	if err := c.addTeacher(name); err != nil {
-		return "Error adding teacher: " + err.Error()
+		return T("Error adding teacher: @1", err.Error())
 	}
 	if proxy.Find(name) != nil {
 		c.scheduleReapplyStates(name, 0)
 	}
-	return "Teacher " + name + " added."
+	return T("Teacher @1 added.", name)
 }
 
 func (c *controller) handleTeacherRemoveCmd(cc *proxy.ClientConn, args ...string) string {
 	if len(args) < 1 {
-		return "Usage: >teacher_remove <username>"
+		return T("Usage: >teacher_remove <username>")
 	}
 	name := args[0]
 	if err := c.removeTeacher(name); err != nil {
-		return "Error removing teacher: " + err.Error()
+		return T("Error removing teacher: @1", err.Error())
 	}
 	if proxy.Find(name) != nil {
 		c.scheduleReapplyStates(name, 0)
 	}
-	return "Teacher " + name + " removed."
+	return T("Teacher @1 removed.", name)
 }
 
 func (c *controller) handleTeacherListCmd(cc *proxy.ClientConn, args ...string) string {
 	teachers, err := c.listTeachers()
 	if err != nil {
-		return "Error listing teachers: " + err.Error()
+		return T("Error listing teachers: @1", err.Error())
 	}
 	if len(teachers) == 0 {
-		return "No teachers registered."
+		return T("No teachers registered.")
 	}
-	return "Teachers: " + strings.Join(teachers, ", ")
+	return T("Teachers: @1", strings.Join(teachers, ", "))
 }
 
 func (c *controller) handleFreezeCmd(cc *proxy.ClientConn, args ...string) string {
 	if !c.isTeacher(cc.Name()) {
-		return "You are not permitted to use this command."
+		return T("You are not permitted to use this command.")
 	}
 	if len(args) < 1 {
-		return "Usage: >freeze <student_name|class_name>"
+		return T("Usage: >freeze <student_name|class_name>")
 	}
 
 	target := args[0]
@@ -153,20 +153,20 @@ func (c *controller) handleFreezeCmd(cc *proxy.ClientConn, args ...string) strin
 	cls, err := c.getClassByName(target)
 	if err == nil && cls != nil {
 		c.freezeClass(cls.ID)
-		return "Class " + target + " frozen."
+		return T("Class @1 frozen.", target)
 	}
 
 	// Try student name
 	c.freezePlayer(target)
-	return "Player " + target + " frozen."
+	return T("Player @1 frozen.", target)
 }
 
 func (c *controller) handleUnfreezeCmd(cc *proxy.ClientConn, args ...string) string {
 	if !c.isTeacher(cc.Name()) {
-		return "You are not permitted to use this command."
+		return T("You are not permitted to use this command.")
 	}
 	if len(args) < 1 {
-		return "Usage: >unfreeze <student_name|class_name>"
+		return T("Usage: >unfreeze <student_name|class_name>")
 	}
 
 	target := args[0]
@@ -174,10 +174,10 @@ func (c *controller) handleUnfreezeCmd(cc *proxy.ClientConn, args ...string) str
 	cls, err := c.getClassByName(target)
 	if err == nil && cls != nil {
 		c.unfreezeClass(cls.ID)
-		return "Class " + target + " unfrozen."
+		return T("Class @1 unfrozen.", target)
 	}
 
 	// Try student name
 	c.unfreezePlayer(target)
-	return "Player " + target + " unfrozen."
+	return T("Player @1 unfrozen.", target)
 }

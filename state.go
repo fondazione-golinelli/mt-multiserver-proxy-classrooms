@@ -277,64 +277,64 @@ func (c *controller) getClassTeachers(classID int) ([]string, error) {
 func (c *controller) addClassTeacher(classID int, teacherName string) (bool, string) {
 	teacherName = strings.TrimSpace(teacherName)
 	if teacherName == "" || len(teacherName) > 50 {
-		return false, "Teacher name must be 1-50 characters."
+		return false, T("Teacher name must be 1-50 characters.")
 	}
 	cls, err := c.getClassByID(classID)
 	if err != nil || cls == nil {
-		return false, "Class not found."
+		return false, T("Class not found.")
 	}
 	if cls.CreatedBy == teacherName {
-		return false, teacherName + " already owns this class."
+		return false, T("@1 already owns this class.", teacherName)
 	}
 	wasRegistered, err := c.getTeacher(teacherName)
 	if err != nil {
-		return false, "Database error."
+		return false, T("Database error.")
 	}
 	institute, _ := c.getTeacherInstitute(cls.CreatedBy)
 	tx, err := c.db.Begin()
 	if err != nil {
-		return false, "Failed to link teacher."
+		return false, T("Failed to link teacher.")
 	}
 	defer tx.Rollback()
 	if _, err := tx.Exec(
 		"INSERT IGNORE INTO teachers (username, institute) VALUES (?, ?)", teacherName, institute); err != nil {
-		return false, "Failed to register teacher."
+		return false, T("Failed to register teacher.")
 	}
 	// Assigning the full teacher role upgrades an existing Assistance
 	// assignment for the same class.
 	if _, err := tx.Exec(
 		"DELETE FROM class_assistants WHERE class_id = ? AND username = ?", classID, teacherName); err != nil {
-		return false, "Failed to update the class role."
+		return false, T("Failed to update the class role.")
 	}
 	res, err := tx.Exec(
 		"INSERT IGNORE INTO class_teachers (class_id, username) VALUES (?, ?)", classID, teacherName)
 	if err != nil {
-		return false, "Failed to link teacher."
+		return false, T("Failed to link teacher.")
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return false, teacherName + " is already linked to this class."
+		return false, T("@1 is already linked to this class.", teacherName)
 	}
 	if err := tx.Commit(); err != nil {
-		return false, "Failed to link teacher."
+		return false, T("Failed to link teacher.")
 	}
 	if !wasRegistered {
-		return true, "Teacher registered and linked."
+		return true, T("Teacher registered and linked.")
 	}
-	return true, "Teacher linked."
+	return true, T("Teacher linked.")
 }
 
 func (c *controller) removeClassTeacher(classID int, teacherName string) (bool, string) {
 	res, err := c.db.Exec(
 		"DELETE FROM class_teachers WHERE class_id = ? AND username = ?", classID, teacherName)
 	if err != nil {
-		return false, "Failed to unlink teacher."
+		return false, T("Failed to unlink teacher.")
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return false, teacherName + " is not linked to this class."
+		return false, T("@1 is not linked to this class.", teacherName)
 	}
-	return true, "Teacher unlinked."
+	return true, T("Teacher unlinked.")
 }
 
 func (c *controller) getClassAssistants(classID int) ([]string, error) {
@@ -384,41 +384,41 @@ func (c *controller) getClassStaff(classID int) ([]string, error) {
 func (c *controller) addClassAssistant(classID int, playerName string) (bool, string) {
 	playerName = strings.TrimSpace(playerName)
 	if playerName == "" || len(playerName) > 50 {
-		return false, "Assistance name must be 1-50 characters."
+		return false, T("Assistance name must be 1-50 characters.")
 	}
 	cls, err := c.getClassByID(classID)
 	if err != nil || cls == nil {
-		return false, "Class not found."
+		return false, T("Class not found.")
 	}
 	if cls.CreatedBy == playerName || c.isLinkedTeacherInClass(classID, playerName) {
-		return false, playerName + " is already a teacher for this class."
+		return false, T("@1 is already a teacher for this class.", playerName)
 	}
 	if c.isStudentInClass(classID, playerName) {
-		return false, playerName + " is currently a student in this class."
+		return false, T("@1 is currently a student in this class.", playerName)
 	}
 	res, err := c.db.Exec(
 		"INSERT IGNORE INTO class_assistants (class_id, username) VALUES (?, ?)", classID, playerName)
 	if err != nil {
-		return false, "Failed to add Assistance."
+		return false, T("Failed to add Assistance.")
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return false, playerName + " is already an Assistance for this class."
+		return false, T("@1 is already an Assistance for this class.", playerName)
 	}
-	return true, "Assistance added."
+	return true, T("Assistance added.")
 }
 
 func (c *controller) removeClassAssistant(classID int, playerName string) (bool, string) {
 	res, err := c.db.Exec(
 		"DELETE FROM class_assistants WHERE class_id = ? AND username = ?", classID, playerName)
 	if err != nil {
-		return false, "Failed to remove Assistance."
+		return false, T("Failed to remove Assistance.")
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return false, playerName + " is not an Assistance for this class."
+		return false, T("@1 is not an Assistance for this class.", playerName)
 	}
-	return true, "Assistance removed."
+	return true, T("Assistance removed.")
 }
 
 func (c *controller) getAllClasses() ([]classData, error) {
@@ -485,43 +485,43 @@ func (c *controller) getClassByName(name string) (*classData, error) {
 
 func (c *controller) createClass(teacherName, className string) (bool, string) {
 	if className == "" || len(className) > 100 {
-		return false, "Class name must be 1-100 characters."
+		return false, T("Class name must be 1-100 characters.")
 	}
 
 	existing, err := c.getClassByName(className)
 	if err != nil {
-		return false, "Database error."
+		return false, T("Database error.")
 	}
 	if existing != nil {
-		return false, "A class with that name already exists."
+		return false, T("A class with that name already exists.")
 	}
 
 	_, err = c.db.Exec(
 		"INSERT INTO classes (name, created_by) VALUES (?, ?)",
 		className, teacherName)
 	if err != nil {
-		return false, "Failed to create class."
+		return false, T("Failed to create class.")
 	}
-	return true, "Class created."
+	return true, T("Class created.")
 }
 
 func (c *controller) deleteClass(teacherName string, classID int) (bool, string) {
 	cls, err := c.getClassByID(classID)
 	if err != nil || cls == nil {
-		return false, "Class not found."
+		return false, T("Class not found.")
 	}
 
 	cc := proxy.Find(teacherName)
 	isAdmin := cc != nil && cc.HasPerms("server")
 	if cls.CreatedBy != teacherName && !isAdmin {
-		return false, "You don't own this class."
+		return false, T("You don't own this class.")
 	}
 
 	_, err = c.db.Exec("DELETE FROM classes WHERE id = ?", classID)
 	if err != nil {
-		return false, "Failed to delete class."
+		return false, T("Failed to delete class.")
 	}
-	return true, "Class deleted."
+	return true, T("Class deleted.")
 }
 
 // ── Student management ─────────────────────────────────────────────────────
@@ -579,25 +579,25 @@ func (c *controller) getStudentClass(studentName string) (*classData, error) {
 
 func (c *controller) validateStudentAssignment(classID int, studentName string) (bool, string) {
 	if studentName == "" {
-		return false, "Student name is empty."
+		return false, T("Student name is empty.")
 	}
 	cls, err := c.getClassByID(classID)
 	if err != nil || cls == nil {
-		return false, "Class not found."
+		return false, T("Class not found.")
 	}
 	if cls.CreatedBy == studentName || c.isLinkedTeacherInClass(classID, studentName) || c.isAssistantInClass(classID, studentName) {
-		return false, studentName + " is already staff for this class."
+		return false, T("@1 is already staff for this class.", studentName)
 	}
 
 	existing, err := c.getStudentClass(studentName)
 	if err != nil {
-		return false, "Database error."
+		return false, T("Database error.")
 	}
 	if existing != nil {
 		if existing.ID == classID {
-			return false, studentName + " is already in this class."
+			return false, T("@1 is already in this class.", studentName)
 		}
-		return false, studentName + " is already assigned to class " + existing.Name + "."
+		return false, T("@1 is already assigned to class @2.", studentName, existing.Name)
 	}
 
 	return true, ""
@@ -612,9 +612,9 @@ func (c *controller) addStudent(classID int, studentName string) (bool, string) 
 		"INSERT INTO class_students (class_id, username) VALUES (?, ?)",
 		classID, studentName)
 	if err != nil {
-		return false, "Failed to add student."
+		return false, T("Failed to add student.")
 	}
-	return true, "Student added."
+	return true, T("Student added.")
 }
 
 func (c *controller) removeStudent(classID int, studentName string) (bool, string) {
@@ -622,13 +622,13 @@ func (c *controller) removeStudent(classID int, studentName string) (bool, strin
 		"DELETE FROM class_students WHERE class_id = ? AND username = ?",
 		classID, studentName)
 	if err != nil {
-		return false, "Failed to remove student."
+		return false, T("Failed to remove student.")
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return false, studentName + " is not in this class."
+		return false, T("@1 is not in this class.", studentName)
 	}
-	return true, "Student removed."
+	return true, T("Student removed.")
 }
 
 func (c *controller) isStudentInClass(classID int, playerName string) bool {
@@ -937,7 +937,7 @@ func (c *controller) gatherPlayers(students []string, teacherName string) {
 func (c *controller) teleportToPlayer(cc *proxy.ClientConn, target string) {
 	scc := proxy.Find(target)
 	if scc == nil {
-		cc.SendChatMsg("[Classrooms] " + target + " is not online.")
+		cc.SendChatMsg("[Classrooms] " + T("@1 is not online.", target))
 		return
 	}
 

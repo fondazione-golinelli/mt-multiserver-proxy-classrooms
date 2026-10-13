@@ -9,10 +9,10 @@ func TestMissionHelpers(t *testing.T) {
 	if parseAmount("abc", 7, 99) != 7 || parseAmount("0", 7, 99) != 7 || parseAmount("5000", 1, 999) != 999 {
 		t.Fatal("parseAmount fallback/clamp")
 	}
-	if goalText(missionGoal{Type: "deliver", Label: "Wheat", Count: 20}) != "Deliver 20 Wheat" {
+	if goalText(missionGoal{Type: "deliver", Label: "Wheat", Count: 20}) != T("Deliver @1 @2", 20, "Wheat") {
 		t.Fatal("deliver goal text")
 	}
-	if goalText(missionGoal{Type: "animals", Label: "Cow", Count: 4}) != "4 × Cow in the zone" {
+	if goalText(missionGoal{Type: "animals", Label: "Cow", Count: 4}) != T("@1 × @2 in the zone", 4, "Cow") {
 		t.Fatal("animals goal text")
 	}
 	if toolsText(nil) != "none" || toolsText([]missionTool{{Label: "Hoe", Count: 1}, {Label: "Seeds", Count: 16}}) != "Hoe ×1, Seeds ×16" {
@@ -22,7 +22,7 @@ func TestMissionHelpers(t *testing.T) {
 	if p["id"] != 3 || len(p["participants"].([]string)) != 0 || len(p["objectives"].([]map[string]interface{})) != 1 {
 		t.Fatalf("payload %v", p)
 	}
-	if goalText(missionGoal{Type: "blocks", Label: "Water", Count: 20}) != "20 × Water blocks in the zone" {
+	if goalText(missionGoal{Type: "blocks", Label: "Water", Count: 20}) != T("@1 × @2 blocks in the zone", 20, "Water") {
 		t.Fatal("blocks goal text")
 	}
 	if clampIndex(0, 3) != 1 || clampIndex(4, 3) != 1 || clampIndex(2, 3) != 2 {
@@ -58,7 +58,7 @@ func TestMissionMerging(t *testing.T) {
 func TestWorldMissionHelpers(t *testing.T) {
 	zones := []zoneData{{ID: 1, Name: "Farm"}, {ID: 2, Name: "Lake"}}
 	labels, ids := newMissionPlaces(zones, map[int]*missionData{1: {ID: 9, ZoneID: 1}})
-	if len(labels) != 2 || labels[0] != "Whole world" || labels[1] != "Zone: Lake" || ids[0] != 0 || ids[1] != 2 {
+	if len(labels) != 2 || labels[0] != T("Whole world") || labels[1] != T("Zone: @1", "Lake") || ids[0] != 0 || ids[1] != 2 {
 		t.Fatalf("places: %v %v", labels, ids)
 	}
 	animals := []missionGoal{{Type: "animals", Label: "Cow", Count: 4}}
@@ -69,10 +69,10 @@ func TestWorldMissionHelpers(t *testing.T) {
 	if needsChest(collect, true) || !needsChest([]missionGoal{{Type: "deliver"}}, false) {
 		t.Fatal("gathering needs no chest, deliveries do")
 	}
-	if got := goalTextFor(animals[0], true); got != "4 × Cow near the chest" {
+	if got := goalTextFor(animals[0], true); got != T("@1 × @2 near the chest", 4, "Cow") {
 		t.Fatalf("world goal text: %q", got)
 	}
-	if got := goalTextFor(collect[0], false); got != "Gather 5 Coal" {
+	if got := goalTextFor(collect[0], false); got != T("Gather @1 @2", 5, "Coal") {
 		t.Fatalf("collect text: %q", got)
 	}
 	if catalogKind("collect") != "deliver" || catalogKind("blocks") != "blocks" {

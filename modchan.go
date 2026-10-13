@@ -43,7 +43,7 @@ func (c *controller) handleBridgeMessage(cc *proxy.ClientConn, sender, msg strin
 			return
 		}
 		if err := c.hopPlayer(cc, c.cfg.LobbyServer); err != nil {
-			cc.SendChatMsg("[Classrooms] Failed to return to the HUB: " + err.Error())
+			cc.SendChatMsg("[Classrooms] " + T("Failed to return to the HUB: @1", err.Error()))
 			return
 		}
 		c.clearPortalVisitor(player)
@@ -148,7 +148,7 @@ func (c *controller) handleBridgeMessage(cc *proxy.ClientConn, sender, msg strin
 	}
 	if teacher != nil {
 		// The bridge already set it live: joins and respawns use it now.
-		teacher.SendChatMsg("[Classrooms] Arrival point saved: players appear here from now on.")
+		teacher.SendChatMsg("[Classrooms] " + T("Arrival point saved: players appear here from now on."))
 		c.showInstanceSettings(teacher, capture.InstanceID)
 	}
 }

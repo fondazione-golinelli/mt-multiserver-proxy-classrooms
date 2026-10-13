@@ -69,7 +69,7 @@ func (c *controller) showPortalWorlds(cc *proxy.ClientConn) {
 
 	instances, err := c.getRunningClassInstances()
 	if err != nil {
-		cc.SendChatMsg("[Classrooms] The active world list is temporarily unavailable.")
+		cc.SendChatMsg("[Classrooms] " + T("The active world list is temporarily unavailable."))
 		return
 	}
 	name := cc.Name()
@@ -97,13 +97,13 @@ func (c *controller) showPortalWorlds(cc *proxy.ClientConn) {
 
 	var b strings.Builder
 	fsOpen(&b, 12.6, 10)
-	fsHeader(&b, 12.6, "Class worlds", "Live class worlds you can enter", false, true)
+	fsHeader(&b, 12.6, T("Class worlds"), T("Live class worlds you can enter"), false, true)
 
 	if len(instances) == 0 {
 		b.WriteString(box(0.3, 1.3, 12, 2.0, colorCard))
 		b.WriteString(fmt.Sprintf("image[0.6,1.65;0.55,0.55;%s]", iconGlobe))
-		b.WriteString(coloredLbl(1.35, 1.95, light, "No class worlds are open right now."))
-		b.WriteString(hint(1.35, 2.45, "Come back when your teacher opens one."))
+		b.WriteString(coloredLbl(1.35, 1.95, light, T("No class worlds are open right now.")))
+		b.WriteString(hint(1.35, 2.45, T("Come back when your teacher opens one.")))
 		cc.ShowFormspec("classrooms:portal_worlds", b.String())
 		return
 	}
@@ -134,10 +134,10 @@ func (c *controller) showPortalWorlds(cc *proxy.ClientConn) {
 		b.WriteString(statusDot(0.3, y+0.24, success))
 		title := mcColorize(light, inst.Title())
 		if staffInside[inst.ID] {
-			title += mcColorize(success, "   ● Teacher inside")
+			title += mcColorize(success, "   ● "+T("Teacher inside"))
 		}
 		if cc.ServerName() == inst.ProxyName {
-			title += mcColorize(warning, "   ● You are here")
+			title += mcColorize(warning, "   ● "+T("You are here"))
 		}
 		b.WriteString(fmt.Sprintf("label[0.7,%g;%s]", y+0.33, fmtEsc(title)))
 		players := len(c.playersOnInstance(inst.ProxyName))
@@ -145,42 +145,41 @@ func (c *controller) showPortalWorlds(cc *proxy.ClientConn) {
 		if len(teacher) > 14 {
 			teacher = append(teacher[:13], '…')
 		}
-		details := fmt.Sprintf("Map: %s  ·  Teacher: %s  ·  %s inside", inst.TemplateName, string(teacher),
-			plural(players, "player", "players"))
+		details := T("Map: @1  ·  Teacher: @2  ·  @3 players inside", inst.TemplateName, string(teacher), players)
 		b.WriteString(fmt.Sprintf("label[0.7,%g;%s]", y+0.7, fmtEsc(mcColorize(muted, details))))
 		field := "visit_inst_" + inst.ID
 		switch role {
 		case portalStudent:
 			b.WriteString(fmt.Sprintf("label[0.7,%g;%s]", y+1.05, fmtEsc(mcColorize(success,
-				"Your teacher is inside: you join as a student"))))
-			b.WriteString(styledBtn(9.35, y+0.3, 2.1, 0.7, field, "Join", colorPrimary))
-			b.WriteString(tooltip(field, "Enter as a student of your class"))
+				T("Your teacher is inside: you join as a student")))))
+			b.WriteString(styledBtn(9.35, y+0.3, 2.1, 0.7, field, T("Join"), colorPrimary))
+			b.WriteString(tooltip(field, T("Enter as a student of your class")))
 		case portalStaff:
 			b.WriteString(fmt.Sprintf("label[0.7,%g;%s]", y+1.05, fmtEsc(mcColorize(success,
-				"You enter with your usual role"))))
-			b.WriteString(styledBtn(9.35, y+0.3, 2.1, 0.7, field, "Join", colorPrimary))
+				T("You enter with your usual role")))))
+			b.WriteString(styledBtn(9.35, y+0.3, 2.1, 0.7, field, T("Join"), colorPrimary))
 		default:
-			text := "Spectator: fly through blocks, no building"
+			text := T("Spectator: fly through blocks, no building")
 			if own {
-				text = "Your teacher is not inside yet: you visit as a spectator"
+				text = T("Your teacher is not inside yet: you visit as a spectator")
 			}
 			b.WriteString(fmt.Sprintf("label[0.7,%g;%s]", y+1.05, fmtEsc(mcColorize(warning, text))))
-			b.WriteString(styledBtn(9.35, y+0.3, 2.1, 0.7, field, "Visit", colorButton))
-			b.WriteString(tooltip(field, "Look around as a spectator: you can fly and pass through blocks but not build"))
+			b.WriteString(styledBtn(9.35, y+0.3, 2.1, 0.7, field, T("Visit"), colorButton))
+			b.WriteString(tooltip(field, T("Look around as a spectator: you can fly and pass through blocks but not build")))
 		}
 		y += cardH + gap
 	}
 	if len(mine) > 0 {
-		section("Your class · " + studentClass.Name)
+		section(T("YOUR CLASS · @1", studentClass.Name))
 		for _, inst := range mine {
 			card(inst, true)
 		}
 	}
 	if len(others) > 0 {
 		if len(mine) > 0 {
-			section("Other class worlds")
+			section(T("OTHER CLASS WORLDS"))
 		} else {
-			section("Open class worlds")
+			section(T("OPEN CLASS WORLDS"))
 		}
 		for _, inst := range others {
 			card(inst, false)
@@ -190,8 +189,8 @@ func (c *controller) showPortalWorlds(cc *proxy.ClientConn) {
 
 	b.WriteString(box(0.3, 8.7, 12, 1.0, colorCard))
 	b.WriteString(fmt.Sprintf("image[0.55,8.92;0.5,0.5;%s]", iconEnter))
-	b.WriteString(hint(1.25, 9.05, "Spectators fly and pass through blocks but cannot build."))
-	b.WriteString(hint(1.25, 9.45, "Use the door in your hotbar to come back, the map to teleport."))
+	b.WriteString(hint(1.25, 9.05, T("Spectators fly and pass through blocks but cannot build.")))
+	b.WriteString(hint(1.25, 9.45, T("Use the door in your hotbar to come back, the map to teleport.")))
 
 	cc.ShowFormspec("classrooms:portal_worlds", b.String())
 }
@@ -210,7 +209,7 @@ func (c *controller) handlePortalWorlds(cc *proxy.ClientConn, fields []mt.Field)
 		instanceID := strings.TrimPrefix(name, "visit_inst_")
 		inst, err := c.getInstanceByID(instanceID)
 		if err != nil || inst == nil || inst.ClassID == nil || inst.Status != "running" {
-			c.notify(cc, "That class world is no longer available.")
+			c.notify(cc, T("That class world is no longer available."))
 			c.showPortalWorlds(cc)
 			return
 		}
@@ -231,7 +230,7 @@ func (c *controller) handlePortalWorlds(cc *proxy.ClientConn, fields []mt.Field)
 		}
 		if err := c.hopPlayer(cc, inst.ProxyName); err != nil {
 			c.clearPortalVisitor(cc.Name())
-			c.notify(cc, "Failed to enter that class world: "+err.Error())
+			c.notify(cc, T("Failed to enter that class world: @1", err.Error()))
 		}
 		return
 	}

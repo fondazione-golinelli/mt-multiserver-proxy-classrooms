@@ -112,7 +112,7 @@ func TestAccountCreationRequiresClassManagement(t *testing.T) {
 		t.Fatal("assistant lost existing student management")
 	}
 	for _, name := range []string{"assistant", "stranger"} {
-		if msg := c.createStudentAccount(1, name, "Student", "password123", "password123"); msg != "Only class teachers and administrators can create accounts." {
+		if msg := c.createStudentAccount(1, name, "Student", "password123", "password123"); msg != T("Only class teachers and administrators can create accounts.") {
 			t.Fatalf("unauthorized creation not rejected: %s", msg)
 		}
 	}

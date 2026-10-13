@@ -298,11 +298,11 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 			if err == nil && inst != nil && inst.Status == "running" && inst.ClassID != nil && *inst.ClassID == classID {
 				if cc.ServerName() != inst.ProxyName {
 					if err := c.hopPlayer(cc, inst.ProxyName); err != nil {
-						c.notify(cc, "Could not join the class world: "+err.Error())
+						c.notify(cc, T("Could not join the class world: @1", err.Error()))
 					}
 				}
 			} else {
-				c.notify(cc, "That class world is no longer available.")
+				c.notify(cc, T("That class world is no longer available."))
 			}
 			return
 		}
@@ -393,7 +393,7 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 			if err == nil && inst != nil && inst.Status == "running" && inst.ClassID != nil && *inst.ClassID == classID {
 				c.hopClassToInstance(cc, inst, true)
 			} else {
-				c.notify(cc, "That class world is not running.")
+				c.notify(cc, T("That class world is not running."))
 			}
 			return
 		}
@@ -447,13 +447,13 @@ func (c *controller) handleTemplatePicker(cc *proxy.ClientConn, fields []mt.Fiel
 			tName := strings.TrimPrefix(k, "pick_tpl_")
 			displayName := cleanInstanceDisplayName(fm["new_instance_name"])
 			if displayName == "" {
-				c.notify(cc, "Instance name is required.")
+				c.notify(cc, T("Instance name is required."))
 				c.showTemplatePicker(cc, activeClassPtr(hasClass, classID))
 				return
 			}
 			player := cc.Name()
 			if !c.beginOp(player) {
-				c.notify(cc, "Another server operation is already running. Please wait for it to finish.")
+				c.notify(cc, T("Another server operation is already running. Please wait for it to finish."))
 				return
 			}
 
@@ -463,7 +463,7 @@ func (c *controller) handleTemplatePicker(cc *proxy.ClientConn, fields []mt.Fiel
 				pClassID = &classIDCopy
 			}
 
-			c.showInstanceProgress(cc, "Creating server", "Provisioning "+displayName+".")
+			c.showInstanceProgress(cc, T("Creating server"), T("Provisioning @1.", displayName))
 
 			go func() {
 				defer c.endOp(player)
@@ -474,10 +474,10 @@ func (c *controller) handleTemplatePicker(cc *proxy.ClientConn, fields []mt.Fiel
 					return
 				}
 				if err != nil {
-					c.showInstanceError(liveCC, inst, "Server creation failed", err.Error())
+					c.showInstanceError(liveCC, inst, T("Server creation failed"), err.Error())
 					return
 				}
-				c.showInstanceReady(liveCC, inst, "Server ready")
+				c.showInstanceReady(liveCC, inst, T("Server ready"))
 			}()
 
 			return
@@ -573,17 +573,17 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 	if _, ok := fm["btn_inst_start"]; ok && inst != nil {
 		player := cc.Name()
 		if !c.beginOp(player) {
-			c.notify(cc, "Another server operation is already running. Please wait for it to finish.")
+			c.notify(cc, T("Another server operation is already running. Please wait for it to finish."))
 			return
 		}
 
-		c.showInstanceProgress(cc, "Starting server", "Starting "+inst.ProxyName+".")
+		c.showInstanceProgress(cc, T("Starting server"), T("Starting @1.", inst.ProxyName))
 		go func() {
 			defer c.endOp(player)
 
 			if err := c.startInstance(inst); err != nil {
 				if liveCC := proxy.Find(player); liveCC != nil {
-					c.showInstanceError(liveCC, inst, "Server start failed", err.Error())
+					c.showInstanceError(liveCC, inst, T("Server start failed"), err.Error())
 				}
 				return
 			}
@@ -595,16 +595,16 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 			if err == nil && updated != nil {
 				inst = updated
 			}
-			c.showInstanceReady(liveCC, inst, "Server ready")
+			c.showInstanceReady(liveCC, inst, T("Server ready"))
 		}()
 		return
 	}
 
 	if _, ok := fm["btn_inst_stop"]; ok && inst != nil {
-		c.notify(cc, "Stopping instance...")
+		c.notify(cc, T("Stopping instance..."))
 		go func() {
 			if err := c.stopInstance(inst); err != nil {
-				c.notify(cc, "Stop failed: "+err.Error())
+				c.notify(cc, T("Stop failed: @1", err.Error()))
 			}
 		}()
 		c.showInstanceViewWithOrigin(cc, instID, origin)
@@ -616,10 +616,10 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 			c.showInstanceViewWithOrigin(cc, instID, origin)
 			return
 		}
-		c.notify(cc, "Deleting instance...")
+		c.notify(cc, T("Deleting instance..."))
 		go func() {
 			if err := c.deleteInstance(inst); err != nil {
-				c.notify(cc, "Delete failed: "+err.Error())
+				c.notify(cc, T("Delete failed: @1", err.Error()))
 			}
 		}()
 		c.showInstanceFallback(cc, origin)
@@ -633,12 +633,12 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 
 	if _, ok := fm["btn_world_controls"]; ok && inst != nil {
 		if !c.instanceIsClassWorld(inst) {
-			c.notify(cc, "World controls are only available for classroom instances.")
+			c.notify(cc, T("World controls are only available for classroom instances."))
 			c.showInstanceViewWithOrigin(cc, instID, origin)
 			return
 		}
 		if cc.ServerName() != inst.ProxyName {
-			c.notify(cc, "Hop to this instance server before using world controls.")
+			c.notify(cc, T("Hop to this instance server before using world controls."))
 			c.showInstanceViewWithOrigin(cc, instID, origin)
 			return
 		}
@@ -662,7 +662,7 @@ func (c *controller) handleInstanceView(cc *proxy.ClientConn, fields []mt.Field)
 		invitee := strings.TrimSpace(fm["invite_name"])
 		if invitee != "" {
 			c.addInstanceInvite(instID, invitee)
-			c.notify(cc, "Invited "+invitee)
+			c.notify(cc, T("Invited @1", invitee))
 		}
 		c.showInstanceViewWithOrigin(cc, instID, origin)
 		return
@@ -696,7 +696,7 @@ func (c *controller) handleInstanceSettings(cc *proxy.ClientConn, fields []mt.Fi
 	needsRestart := false
 	settings, err := c.getInstanceSettingsOrDefault(inst.ID)
 	if err != nil {
-		c.notify(cc, "Could not load settings: "+err.Error())
+		c.notify(cc, T("Could not load settings: @1", err.Error()))
 		c.showInstanceViewWithOrigin(cc, inst.ID, c.getActiveInstanceOrigin(cc.Name()))
 		return
 	}
@@ -746,13 +746,13 @@ func (c *controller) handleInstanceSettings(cc *proxy.ClientConn, fields []mt.Fi
 	}
 	if _, ok := fm["btn_capture_spawn"]; ok {
 		if cc.ServerName() != inst.ProxyName {
-			c.notify(cc, "Hop to this instance before saving your position as spawn.")
+			c.notify(cc, T("Hop to this instance before saving your position as spawn."))
 			c.showInstanceSettings(cc, inst.ID)
 			return
 		}
 		if !cc.IsModChanJoined(modChannel) {
 			go c.ensureChannelJoin(cc)
-			c.notify(cc, "Instance control channel is still connecting. Try again in a moment.")
+			c.notify(cc, T("Instance control channel is still connecting. Try again in a moment."))
 			c.showInstanceSettings(cc, inst.ID)
 			return
 		}
@@ -768,20 +768,20 @@ func (c *controller) handleInstanceSettings(cc *proxy.ClientConn, fields []mt.Fi
 			"player":     cc.Name(),
 			"request_id": requestID,
 		})
-		c.notify(cc, "Asked the server to capture your current position.")
+		c.notify(cc, T("Asked the server to capture your current position."))
 		c.showInstanceSettings(cc, inst.ID)
 		return
 	}
 	if _, ok := fm["btn_save_settings"]; ok {
 		if err := c.saveInstanceSettings(settings); err != nil {
-			c.notify(cc, "Could not save settings: "+err.Error())
+			c.notify(cc, T("Could not save settings: @1", err.Error()))
 			c.showInstanceSettings(cc, inst.ID)
 			return
 		}
 		if c.sendSettingsToInstance(inst, settings) {
-			c.notify(cc, "Settings saved. Hurt, PvP, hunger, flying and creative apply immediately; mobs and explosions need a restart.")
+			c.notify(cc, T("Settings saved. Hurt, PvP, hunger, flying and creative apply immediately; mobs and explosions need a restart."))
 		} else {
-			c.notify(cc, "Settings saved. Start or join the instance before applying them to luanti.conf.")
+			c.notify(cc, T("Settings saved. Start or join the instance before applying them to luanti.conf."))
 		}
 		c.showInstanceSettings(cc, inst.ID)
 		return
@@ -800,7 +800,7 @@ func (c *controller) handleInstanceSettings(cc *proxy.ClientConn, fields []mt.Fi
 	// sends the settings again before restarting.
 	if settingChanged {
 		if err := c.saveInstanceSettings(settings); err != nil {
-			c.notify(cc, "Could not save setting: "+err.Error())
+			c.notify(cc, T("Could not save setting: @1", err.Error()))
 			c.showInstanceSettings(cc, inst.ID)
 			return
 		}
@@ -905,16 +905,16 @@ func (c *controller) handleInstanceRestart(cc *proxy.ClientConn, fields []mt.Fie
 	if _, ok := fm["btn_confirm_restart"]; ok {
 		player := cc.Name()
 		if !c.beginOp(player) {
-			c.notify(cc, "Another server operation is already running. Please wait for it to finish.")
+			c.notify(cc, T("Another server operation is already running. Please wait for it to finish."))
 			return
 		}
 		displaced := c.playersOnInstance(inst.ProxyName)
-		c.showInstanceProgress(cc, "Applying settings", "Moving players to lobby, restarting, then returning them.")
+		c.showInstanceProgress(cc, T("Applying settings"), T("Moving players to lobby, restarting, then returning them."))
 		go func() {
 			defer c.endOp(player)
 			if _, err := c.guidedRestartInstance(inst); err != nil {
 				if liveCC := proxy.Find(player); liveCC != nil {
-					c.showInstanceError(liveCC, inst, "Restart failed", err.Error())
+					c.showInstanceError(liveCC, inst, T("Restart failed"), err.Error())
 				}
 				return
 			}
@@ -923,12 +923,12 @@ func (c *controller) handleInstanceRestart(cc *proxy.ClientConn, fields []mt.Fie
 				return
 			}
 			c.setRestartPending(inst.ID, false)
-			c.notify(liveCC, "Restart complete. Returned "+strconv.Itoa(len(displaced))+" displaced players.")
+			c.notify(liveCC, T("Restart complete. Returned @1 displaced players.", len(displaced)))
 			updated, err := c.getInstanceByID(inst.ID)
 			if err == nil && updated != nil {
 				inst = updated
 			}
-			c.showInstanceReady(liveCC, inst, "Settings applied")
+			c.showInstanceReady(liveCC, inst, T("Settings applied"))
 		}()
 		return
 	}

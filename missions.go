@@ -27,10 +27,10 @@ const (
 )
 
 var missionGoalTypes = [][2]string{
-	{"deliver", "Deliver to the chest"},
-	{"collect", "Gather in inventories"},
-	{"animals", "Animals in the area"},
-	{"blocks", "Blocks in the area"},
+	{"deliver", T("Deliver to the chest")},
+	{"collect", T("Gather in inventories")},
+	{"animals", T("Animals in the area")},
+	{"blocks", T("Blocks in the area")},
 }
 
 type missionGoal struct {
@@ -226,15 +226,15 @@ func nullableID(id int) any {
 func (c *controller) createMission(inst *instanceData, d *missionDraft) (bool, string, int) {
 	title := cleanShortName(d.Title, 40)
 	if title == "" {
-		return false, "Give the mission a title.", 0
+		return false, T("Give the mission a title."), 0
 	}
 	if len(d.Goals) == 0 {
-		return false, "Add at least one goal.", 0
+		return false, T("Add at least one goal."), 0
 	}
 	if d.global() {
 		list, err := c.getWorldMissionList(inst.ID)
 		if err != nil {
-			return false, "Could not check the world's missions.", 0
+			return false, T("Could not check the world's missions."), 0
 		}
 		active := 0
 		for _, m := range list {
@@ -243,15 +243,15 @@ func (c *controller) createMission(inst *instanceData, d *missionDraft) (bool, s
 			}
 		}
 		if active >= maxWorldMissions {
-			return false, fmt.Sprintf("At most %d world missions in progress: delete one first.", maxWorldMissions), 0
+			return false, T("At most @1 world missions in progress: delete one first.", maxWorldMissions), 0
 		}
 	} else {
 		existing, err := c.getMission(d.ZoneID)
 		if err != nil {
-			return false, "Could not check the zone's mission.", 0
+			return false, T("Could not check the zone's mission."), 0
 		}
 		if existing != nil {
-			return false, "This zone already has a mission: delete it first.", 0
+			return false, T("This zone already has a mission: delete it first."), 0
 		}
 	}
 	goals, _ := json.Marshal(d.Goals)
@@ -260,11 +260,11 @@ func (c *controller) createMission(inst *instanceData, d *missionDraft) (bool, s
 		VALUES (?, ?, ?, ?, ?, ?, ?)`, nullableID(d.ZoneID), inst.ID, nullableID(d.GroupID), title,
 		cleanShortName(d.Description, 120), string(goals), string(tools))
 	if err != nil {
-		return false, "Could not save the mission.", 0
+		return false, T("Could not save the mission."), 0
 	}
 	id, _ := res.LastInsertId()
 	c.pushZones(inst)
-	return true, "Mission " + title + " started.", int(id)
+	return true, T("Mission @1 started.", title), int(id)
 }
 
 // updateMission saves edited goals and tools of a mission still in progress.
@@ -272,13 +272,13 @@ func (c *controller) createMission(inst *instanceData, d *missionDraft) (bool, s
 func (c *controller) updateMission(inst *instanceData, d *missionDraft) (bool, string) {
 	title := cleanShortName(d.Title, 40)
 	if title == "" {
-		return false, "Give the mission a title."
+		return false, T("Give the mission a title.")
 	}
 	if len(d.Goals) == 0 {
-		return false, "Add at least one goal."
+		return false, T("Add at least one goal.")
 	}
 	if m, err := c.getMissionByID(d.EditingID); err != nil || m == nil || m.InstanceID != inst.ID {
-		return false, "The mission no longer exists."
+		return false, T("The mission no longer exists.")
 	}
 	goals, _ := json.Marshal(d.Goals)
 	tools, _ := json.Marshal(d.Tools)
@@ -286,17 +286,17 @@ func (c *controller) updateMission(inst *instanceData, d *missionDraft) (bool, s
 		WHERE id = ? AND completed_at IS NULL`,
 		title, cleanShortName(d.Description, 120), string(goals), string(tools), d.EditingID)
 	if err != nil {
-		return false, "Could not save the mission."
+		return false, T("Could not save the mission.")
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return false, "The mission is already completed: it can no longer be changed."
+		return false, T("The mission is already completed: it can no longer be changed.")
 	}
 	// Goal indexes may have changed: wait for a fresh report.
 	c.mu.Lock()
 	delete(c.runtime.missionProgress, d.EditingID)
 	c.mu.Unlock()
 	c.pushZones(inst)
-	return true, "Mission " + title + " updated."
+	return true, T("Mission @1 updated.", title)
 }
 
 func (c *controller) deleteMission(inst *instanceData, missionID int) {
@@ -329,7 +329,7 @@ func (c *controller) missionComplete(m *missionData) bool {
 // missionSummary is the short status shown on zone and mission rows.
 func (c *controller) missionSummary(m *missionData) (string, string) {
 	if c.missionComplete(m) {
-		return "Completed", success
+		return T("Completed"), success
 	}
 	p, ok := c.getMissionProgress(m.ID)
 	done := 0
@@ -338,7 +338,7 @@ func (c *controller) missionSummary(m *missionData) (string, string) {
 			done++
 		}
 	}
-	return fmt.Sprintf("%d/%d goals", done, len(m.Goals)), warning
+	return T("@1/@2 goals", done, len(m.Goals)), warning
 }
 
 // missionPayload is a mission as sent to the bridge: inside its zone entry
@@ -481,19 +481,21 @@ func goalText(g missionGoal) string {
 // goalTextFor describes a goal; world missions count animals and blocks
 // around their delivery chest.
 func goalTextFor(g missionGoal, global bool) string {
-	where := "in the zone"
-	if global {
-		where = "near the chest"
-	}
 	switch g.Type {
 	case "deliver":
-		return fmt.Sprintf("Deliver %d %s", g.Count, g.Label)
+		return T("Deliver @1 @2", g.Count, g.Label)
 	case "collect":
-		return fmt.Sprintf("Gather %d %s", g.Count, g.Label)
+		return T("Gather @1 @2", g.Count, g.Label)
 	case "animals":
-		return fmt.Sprintf("%d × %s %s", g.Count, g.Label, where)
+		if global {
+			return T("@1 × @2 near the chest", g.Count, g.Label)
+		}
+		return T("@1 × @2 in the zone", g.Count, g.Label)
 	case "blocks":
-		return fmt.Sprintf("%d × %s blocks %s", g.Count, g.Label, where)
+		if global {
+			return T("@1 × @2 blocks near the chest", g.Count, g.Label)
+		}
+		return T("@1 × @2 blocks in the zone", g.Count, g.Label)
 	}
 	return g.Label
 }

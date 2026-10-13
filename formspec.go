@@ -88,7 +88,7 @@ func (c *controller) showMainDashboard(cc *proxy.ClientConn) {
 	if isFullTeacher {
 		subtitle = T("Teacher dashboard")
 	}
-	fsHeader(&b, 12, "Classrooms", subtitle, false, true)
+	fsHeader(&b, 12, T("Classrooms"), subtitle, false, true)
 	if c.isAdmin(name) {
 		b.WriteString(iconBtn(10.35, 0.17, 0.66, "btn_admin_panel", iconGear, T("Admin panel: all worlds, classes and teachers")))
 	}
@@ -421,16 +421,16 @@ func (c *controller) showTemplatePicker(cc *proxy.ClientConn, classID *int) {
 
 	var b strings.Builder
 	fsOpen(&b, 11, 8.6)
-	fsHeader(&b, 11, "New class world", "Name it, then pick a map", true, true)
+	fsHeader(&b, 11, T("New class world"), T("Name it, then pick a map"), true, true)
 
 	b.WriteString(box(0.3, 1.3, 10.4, 1.15, colorCard))
 	b.WriteString(coloredLbl(0.55, 1.6, warning, "1"))
-	b.WriteString(coloredLbl(0.85, 1.6, light, "World name"))
+	b.WriteString(coloredLbl(0.85, 1.6, light, T("World name")))
 	b.WriteString("field[0.55,1.85;9.9,0.5;new_instance_name;;]")
 	b.WriteString("field_close_on_enter[new_instance_name;false]")
 
 	b.WriteString(coloredLbl(0.55, 2.85, warning, "2"))
-	b.WriteString(coloredLbl(0.85, 2.85, light, "Choose a map"))
+	b.WriteString(coloredLbl(0.85, 2.85, light, T("Choose a map")))
 	b.WriteString(scrollbarFor("scr_templates", 10.45, 3.15, 4.55, len(templates), 1.05, 0.05))
 	b.WriteString("scroll_container[0.3,3.15;10.1,4.55;scr_templates;vertical;0.1]")
 	y := 0.05
@@ -440,13 +440,13 @@ func (c *controller) showTemplatePicker(cc *proxy.ClientConn, classID *int) {
 		b.WriteString(fmt.Sprintf("image[0.2,%g;0.55,0.55;%s]", y+0.2, iconGlobe))
 		b.WriteString(fmt.Sprintf("label[0.95,%g;%s]", y+0.3, fmtEsc(mcColorize(light, tName))))
 		b.WriteString(fmt.Sprintf("label[0.95,%g;%s]", y+0.66, fmtEsc(mcColorize(muted, tpl.ServerDescription))))
-		b.WriteString(styledBtn(8.0, y+0.17, 1.8, 0.6, "pick_tpl_"+tName, "Create", colorPrimary))
+		b.WriteString(styledBtn(8.0, y+0.17, 1.8, 0.6, "pick_tpl_"+tName, T("Create"), colorPrimary))
 		y += 1.05
 	}
 	b.WriteString("scroll_container_end[]")
 
 	b.WriteString(fmt.Sprintf("image[0.35,7.9;0.4,0.4;%s]", iconCheck))
-	b.WriteString(hint(0.9, 8.1, "New worlds start safe: no damage or hunger, peaceful mobs."))
+	b.WriteString(hint(0.9, 8.1, T("New worlds start safe: no damage or hunger, peaceful mobs.")))
 
 	cc.ShowFormspec("classrooms:template_picker", b.String())
 }
@@ -466,9 +466,9 @@ func (c *controller) showInstanceProgress(cc *proxy.ClientConn, title, detail st
 	dialogFrame(&b, 9, 5.4, warning, iconRefresh, title)
 	b.WriteString(box(0.5, 1.6, 8, 2.5, colorCard))
 	b.WriteString(coloredLbl(0.85, 2.15, light, detail))
-	b.WriteString(hint(0.85, 2.85, "This can take a minute. You can close this window:"))
-	b.WriteString(hint(0.85, 3.35, "a new one opens when the world is ready."))
-	b.WriteString(btnExit(3.0, 4.4, 3.0, 0.7, "btn_progress_close", "Close"))
+	b.WriteString(hint(0.85, 2.85, T("This can take a minute. You can close this window:")))
+	b.WriteString(hint(0.85, 3.35, T("a new one opens when the world is ready.")))
+	b.WriteString(btnExit(3.0, 4.4, 3.0, 0.7, "btn_progress_close", T("Close")))
 	cc.ShowFormspec("classrooms:instance_progress", b.String())
 }
 
@@ -490,18 +490,18 @@ func (c *controller) showInstanceReady(cc *proxy.ClientConn, inst *instanceData,
 	dialogFrame(&b, 10, 6.6, success, iconCheck, title)
 	b.WriteString(box(0.5, 1.6, 9, 1.8, colorCard))
 	b.WriteString(coloredLbl(0.85, 2.1, light, inst.Title()))
-	b.WriteString(hint(0.85, 2.7, "Map: "+inst.TemplateName+"   ·   The world is online. What next?"))
+	b.WriteString(hint(0.85, 2.7, T("Map: @1   ·   The world is online. What next?", inst.TemplateName)))
 
 	tileW := 2.7
 	x := 0.5
-	actionTile(&b, x, 3.7, tileW, "btn_ready_hop_me", iconEnter, "Go there", "Join the world yourself", false)
+	actionTile(&b, x, 3.7, tileW, "btn_ready_hop_me", iconEnter, T("Go there"), T("Join the world yourself"), false)
 	x += tileW + 0.45
 	if inst.ClassID != nil {
-		actionTile(&b, x, 3.7, tileW, "btn_ready_hop_class", iconPeople, T("Bring class"), "Move you and every online student into the world", false)
+		actionTile(&b, x, 3.7, tileW, "btn_ready_hop_class", iconPeople, T("Bring class"), T("Move you and every online student into the world"), false)
 		x += tileW + 0.45
 	}
-	actionTile(&b, x, 3.7, tileW, "btn_ready_open", iconGear, "Manage", "Rules, time & weather, start/stop", false)
-	b.WriteString(btnExit(3.7, 5.85, 2.6, 0.55, "btn_ready_close", "Close"))
+	actionTile(&b, x, 3.7, tileW, "btn_ready_open", iconGear, T("Manage"), T("Rules, time & weather, start/stop"), false)
+	b.WriteString(btnExit(3.7, 5.85, 2.6, 0.55, "btn_ready_close", T("Close")))
 
 	cc.ShowFormspec("classrooms:instance_ready", b.String())
 }
@@ -514,13 +514,13 @@ func (c *controller) showInstanceError(cc *proxy.ClientConn, inst *instanceData,
 	var b strings.Builder
 	dialogFrame(&b, 10, 6.6, danger, iconError, title)
 	b.WriteString(box(0.5, 1.6, 9, 3.5, colorCard))
-	b.WriteString(coloredLbl(0.85, 2.05, light, "The operation did not complete. Details:"))
+	b.WriteString(coloredLbl(0.85, 2.05, light, T("The operation did not complete. Details:")))
 	b.WriteString(fmt.Sprintf("textarea[0.85,2.4;8.3,2.5;error_detail;;%s]", fmtEsc(detail)))
 
 	if inst != nil {
-		b.WriteString(btn(1.0, 5.5, 2.6, 0.75, "btn_error_open", "Manage world"))
+		b.WriteString(btn(1.0, 5.5, 2.6, 0.75, "btn_error_open", T("Manage world")))
 	}
-	b.WriteString(btnExit(6.4, 5.5, 2.6, 0.75, "btn_error_close", "Close"))
+	b.WriteString(btnExit(6.4, 5.5, 2.6, 0.75, "btn_error_close", T("Close")))
 
 	cc.ShowFormspec("classrooms:instance_error", b.String())
 }
@@ -539,7 +539,7 @@ func instanceFrame(b *strings.Builder, inst *instanceData, activeTab string) {
 	subtitle := instanceStatusLabel(inst.Status) + "   ·   " + inst.TemplateName
 	fsHeader(b, 11, inst.Title(), subtitle, true, true)
 	tabBar(b, 0.3, 1.3, 3.4, activeTab, [][2]string{
-		{instTabOverview, "Overview"},
+		{instTabOverview, T("Overview")},
 		{instTabRules, T("Rules")},
 		{instTabWorld, T("Time & weather")},
 	})
@@ -568,54 +568,54 @@ func (c *controller) showInstanceViewWithOrigin(cc *proxy.ClientConn, instanceID
 	switch inst.Status {
 	case "running":
 		here := cc.ServerName() == inst.ProxyName
-		joinCaption := "Go there"
+		joinCaption := T("Go there")
 		if here {
 			joinCaption = T("You are here")
 		}
-		actionTile(&b, 0.5, 2.3, 3.2, "btn_hop_me", iconEnter, joinCaption, "Join this world yourself", here)
+		actionTile(&b, 0.5, 2.3, 3.2, "btn_hop_me", iconEnter, joinCaption, T("Join this world yourself"), here)
 		if inst.ClassID != nil {
 			actionTile(&b, 3.9, 2.3, 3.2, "btn_hop_class", iconPeople, T("Bring class"),
-				"Move you and every online student of the class into this world", false)
+				T("Move you and every online student of the class into this world"), false)
 		}
-		actionTile(&b, 7.3, 2.3, 3.2, "btn_inst_stop", iconClose, "Stop world",
-			"Sends everyone inside back to the lobby and turns the world off. Nothing is lost.", false)
+		actionTile(&b, 7.3, 2.3, 3.2, "btn_inst_stop", iconClose, T("Stop world"),
+			T("Sends everyone inside back to the lobby and turns the world off. Nothing is lost."), false)
 	case "stopped":
-		actionTile(&b, 0.5, 2.3, 3.2, "btn_inst_start", iconNext, "Start world",
-			"Turns the world on. It takes about a minute.", false)
-		b.WriteString(hint(4.0, 2.95, "The world is off. Start it to play;"))
-		b.WriteString(hint(4.0, 3.4, "everything built so far is kept."))
+		actionTile(&b, 0.5, 2.3, 3.2, "btn_inst_start", iconNext, T("Start world"),
+			T("Turns the world on. It takes about a minute."), false)
+		b.WriteString(hint(4.0, 2.95, T("The world is off. Start it to play;")))
+		b.WriteString(hint(4.0, 3.4, T("everything built so far is kept.")))
 	default:
 		b.WriteString(fmt.Sprintf("image[0.6,2.6;0.6,0.6;%s]", iconRefresh))
-		b.WriteString(coloredLbl(1.4, 2.9, warning, "The world is being created. This takes a minute or two."))
+		b.WriteString(coloredLbl(1.4, 2.9, warning, T("The world is being created. This takes a minute or two.")))
 	}
 
 	// Details.
 	b.WriteString(box(0.3, 4.55, 10.4, 1.5, colorCard))
-	b.WriteString(sectionTitle(0.55, 4.85, "Details"))
-	b.WriteString(hint(0.55, 5.3, "Created by: "+inst.CreatedBy))
+	b.WriteString(sectionTitle(0.55, 4.85, T("DETAILS")))
+	b.WriteString(hint(0.55, 5.3, T("Created by: @1", inst.CreatedBy)))
 	if inst.Institute != "" {
-		b.WriteString(hint(5.4, 5.3, "Institute: "+inst.Institute))
+		b.WriteString(hint(5.4, 5.3, T("Institute: @1", inst.Institute)))
 	}
-	b.WriteString(hint(0.55, 5.75, "Join command: /join "+inst.ProxyName))
+	b.WriteString(hint(0.55, 5.75, T("Join command: /join @1", inst.ProxyName)))
 
 	// Guests.
 	b.WriteString(box(0.3, 6.25, 10.4, 1.4, colorCard))
-	b.WriteString(sectionTitle(0.55, 6.55, "Invite a guest"))
-	b.WriteString(hint(4.0, 6.55, "Lets a player outside the class join this world"))
+	b.WriteString(sectionTitle(0.55, 6.55, T("INVITE A GUEST")))
+	b.WriteString(hint(4.0, 6.55, T("Lets a player outside the class join this world")))
 	b.WriteString("field[0.55,6.85;7.4,0.6;invite_name;;]")
 	b.WriteString("field_close_on_enter[invite_name;false]")
-	b.WriteString(tooltip("invite_name", "Player name to invite"))
-	b.WriteString(styledBtn(8.15, 6.85, 2.35, 0.6, "btn_invite", "+ Invite", colorPrimary))
+	b.WriteString(tooltip("invite_name", T("Player name to invite")))
+	b.WriteString(styledBtn(8.15, 6.85, 2.35, 0.6, "btn_invite", T("+ Invite"), colorPrimary))
 
 	// Danger zone.
 	b.WriteString(box(0.3, 7.85, 10.4, 1.5, colorCard))
-	b.WriteString(sectionTitle(0.55, 8.15, "Delete"))
+	b.WriteString(sectionTitle(0.55, 8.15, T("DELETE")))
 	if c.isDeleteArmed(cc.Name(), "instance:"+inst.ID) {
-		b.WriteString(coloredLbl(0.55, 8.7, danger, "Sure? This cannot be undone."))
-		b.WriteString(styledBtn(7.3, 8.35, 3.2, 0.7, "btn_inst_delete", "Yes, delete forever", colorDanger))
+		b.WriteString(coloredLbl(0.55, 8.7, danger, T("Sure? This cannot be undone.")))
+		b.WriteString(styledBtn(7.3, 8.35, 3.2, 0.7, "btn_inst_delete", T("Yes, delete forever"), colorDanger))
 	} else {
-		b.WriteString(hint(0.55, 8.7, "Removes the world and all builds."))
-		b.WriteString(styledBtn(7.3, 8.35, 3.2, 0.7, "btn_inst_delete", "Delete world", colorDanger))
+		b.WriteString(hint(0.55, 8.7, T("Removes the world and all builds.")))
+		b.WriteString(styledBtn(7.3, 8.35, 3.2, 0.7, "btn_inst_delete", T("Delete world"), colorDanger))
 	}
 
 	cc.ShowFormspec("classrooms:instance", b.String())
@@ -638,7 +638,7 @@ func (c *controller) showInstanceSettings(cc *proxy.ClientConn, instanceID strin
 	c.setActiveInstanceWithOrigin(cc.Name(), instanceID, c.getActiveInstanceOrigin(cc.Name()))
 	settings, err := c.getInstanceSettingsOrDefault(instanceID)
 	if err != nil {
-		c.showInstanceError(cc, inst, "Settings error", err.Error())
+		c.showInstanceError(cc, inst, T("Settings error"), err.Error())
 		return
 	}
 
@@ -647,69 +647,69 @@ func (c *controller) showInstanceSettings(cc *proxy.ClientConn, instanceID strin
 
 	// Players.
 	b.WriteString(box(0.3, 2.15, 5.1, 3.15, colorCard))
-	b.WriteString(sectionTitle(0.55, 2.45, "Players"))
-	settingRow(&b, 0.55, 2.95, iconHeart, "setting_damage", "Can get hurt",
-		"Players lose health from falls, lava, mobs... Off = nobody can get hurt. Teachers, creative and flying players never get hurt. Applies at once.", settings.EnableDamage)
-	settingRow(&b, 0.55, 3.45, iconPvP, "setting_pvp", "Can hit each other (PvP)",
-		"Players can damage other players. Needs 'Can get hurt'. Applies at once.", settings.EnablePVP)
-	settingRow(&b, 0.55, 3.95, "", "setting_hunger", "Hunger",
-		"Players need to eat. Teachers, creative and flying players never get hungry. Applies at once.", settings.EnableHunger)
-	settingRow(&b, 0.55, 4.45, "", "setting_student_fly", "Students can fly",
-		"Students may fly (K) and move fast (J). Teachers always can. Flying players don't get hurt or hungry. Applies at once.", settings.StudentFly)
-	settingRow(&b, 0.55, 4.95, "", "setting_student_creative", "Student creative mode",
-		"Students get unlimited blocks and items and break blocks instantly. Applies at once.", settings.StudentCreative)
+	b.WriteString(sectionTitle(0.55, 2.45, T("PLAYERS")))
+	settingRow(&b, 0.55, 2.95, iconHeart, "setting_damage", T("Can get hurt"),
+		T("Players lose health from falls, lava, mobs... Off = nobody can get hurt. Teachers, creative and flying players never get hurt. Applies at once."), settings.EnableDamage)
+	settingRow(&b, 0.55, 3.45, iconPvP, "setting_pvp", T("Can hit each other (PvP)"),
+		T("Players can damage other players. Needs 'Can get hurt'. Applies at once."), settings.EnablePVP)
+	settingRow(&b, 0.55, 3.95, "", "setting_hunger", T("Hunger"),
+		T("Players need to eat. Teachers, creative and flying players never get hungry. Applies at once."), settings.EnableHunger)
+	settingRow(&b, 0.55, 4.45, "", "setting_student_fly", T("Students can fly"),
+		T("Students may fly (K) and move fast (J). Teachers always can. Flying players don't get hurt or hungry. Applies at once."), settings.StudentFly)
+	settingRow(&b, 0.55, 4.95, "", "setting_student_creative", T("Student creative mode"),
+		T("Students get unlimited blocks and items and break blocks instantly. Applies at once."), settings.StudentCreative)
 
 	// World.
 	b.WriteString(box(5.6, 2.15, 5.1, 3.15, colorCard))
-	b.WriteString(sectionTitle(5.85, 2.45, "World"))
-	settingRow(&b, 5.85, 2.95, "", "setting_mobs", "Animals & mobs spawn",
-		"Creatures spawn naturally. Applies after a restart.", settings.MobsSpawn)
-	settingRow(&b, 5.85, 3.45, "", "setting_peaceful", "Only peaceful mobs",
-		"No hostile monsters (zombies, creepers...). Applies after a restart.", settings.OnlyPeacefulMobs)
-	settingRow(&b, 5.85, 3.95, "", "setting_explosions", "Explosions break blocks",
-		"TNT and creepers destroy builds. Applies after a restart.", settings.ExplosionsGriefing)
-	settingRow(&b, 5.85, 4.45, iconLock, "setting_locked", "Lock the world",
-		"Students can only look around, like spectators: no building, digging, using blocks or hitting. Teachers are not affected. Applies at once.", settings.WorldLocked)
+	b.WriteString(sectionTitle(5.85, 2.45, T("WORLD")))
+	settingRow(&b, 5.85, 2.95, "", "setting_mobs", T("Animals & mobs spawn"),
+		T("Creatures spawn naturally. Applies after a restart."), settings.MobsSpawn)
+	settingRow(&b, 5.85, 3.45, "", "setting_peaceful", T("Only peaceful mobs"),
+		T("No hostile monsters (zombies, creepers...). Applies after a restart."), settings.OnlyPeacefulMobs)
+	settingRow(&b, 5.85, 3.95, "", "setting_explosions", T("Explosions break blocks"),
+		T("TNT and creepers destroy builds. Applies after a restart."), settings.ExplosionsGriefing)
+	settingRow(&b, 5.85, 4.45, iconLock, "setting_locked", T("Lock the world"),
+		T("Students can only look around, like spectators: no building, digging, using blocks or hitting. Teachers are not affected. Applies at once."), settings.WorldLocked)
 
 	// Spawn point.
 	b.WriteString(box(0.3, 5.45, 10.4, 1.4, colorCard))
-	b.WriteString(sectionTitle(0.55, 5.75, "Arrival point"))
-	spawn := "Not set (default spawn)"
+	b.WriteString(sectionTitle(0.55, 5.75, T("ARRIVAL POINT")))
+	spawn := T("Not set (default spawn)")
 	if settings.StaticSpawnpoint.Valid && strings.TrimSpace(settings.StaticSpawnpoint.String) != "" {
 		spawn = settings.StaticSpawnpoint.String
 		if settings.SpawnYaw.Valid {
-			spawn += fmt.Sprintf("  facing %.0f°", math.Mod(settings.SpawnYaw.Float64*180/math.Pi+360, 360))
+			spawn += "  " + T("facing @1°", fmt.Sprintf("%.0f", math.Mod(settings.SpawnYaw.Float64*180/math.Pi+360, 360)))
 		}
 	}
 	b.WriteString(coloredLbl(0.55, 6.2, light, spawn))
-	b.WriteString(hint(0.55, 6.55, "Where players appear on join and respawn: at once."))
+	b.WriteString(hint(0.55, 6.55, T("Where players appear on join and respawn: at once.")))
 	if cc.ServerName() == inst.ProxyName {
-		b.WriteString(styledBtn(7.3, 5.85, 3.2, 0.65, "btn_capture_spawn", "Use my position", colorPrimary))
-		b.WriteString(tooltip("btn_capture_spawn", "Saves where you stand and the direction you look"))
+		b.WriteString(styledBtn(7.3, 5.85, 3.2, 0.65, "btn_capture_spawn", T("Use my position"), colorPrimary))
+		b.WriteString(tooltip("btn_capture_spawn", T("Saves where you stand and the direction you look")))
 	} else {
-		b.WriteString(hint(7.0, 6.05, "Join the world to set it."))
+		b.WriteString(hint(7.0, 6.05, T("Join the world to set it.")))
 	}
 
 	// Apply / restart banner.
 	if c.isRestartPending(inst.ID) {
 		b.WriteString(box(0.3, 7.0, 10.4, 1.35, "#4a3a12"))
 		b.WriteString(fmt.Sprintf("image[0.55,7.15;0.5,0.5;%s]", iconWarning))
-		b.WriteString(coloredLbl(1.25, 7.4, warning, "Some changes apply after a restart."))
-		b.WriteString(hint(1.25, 7.9, "Players are brought back automatically."))
+		b.WriteString(coloredLbl(1.25, 7.4, warning, T("Some changes apply after a restart.")))
+		b.WriteString(hint(1.25, 7.9, T("Players are brought back automatically.")))
 		if inst.Status == "running" {
-			b.WriteString(styledBtn(7.6, 7.32, 2.9, 0.7, "btn_restart_instance", "Restart now", colorActive))
+			b.WriteString(styledBtn(7.6, 7.32, 2.9, 0.7, "btn_restart_instance", T("Restart now"), colorActive))
 		} else {
-			b.WriteString(hint(7.0, 7.65, "Start the world to apply."))
+			b.WriteString(hint(7.0, 7.65, T("Start the world to apply.")))
 		}
 	} else {
 		b.WriteString(box(0.3, 7.0, 10.4, 1.35, colorCard))
 		b.WriteString(fmt.Sprintf("image[0.55,7.25;0.42,0.42;%s]", iconCheck))
-		b.WriteString(hint(1.25, 7.45, "Changes are saved as soon as you click."))
-		b.WriteString(hint(1.25, 7.9, "Only mobs and explosions wait for a restart."))
+		b.WriteString(hint(1.25, 7.45, T("Changes are saved as soon as you click.")))
+		b.WriteString(hint(1.25, 7.9, T("Only mobs and explosions wait for a restart.")))
 	}
 
-	b.WriteString(btn(0.3, 8.6, 4.5, 0.7, "btn_reset_settings", "Reset to classroom-safe"))
-	b.WriteString(tooltip("btn_reset_settings", "No damage, PvP or hunger; peaceful mobs only; explosions keep blocks; students can't fly, survival mode"))
+	b.WriteString(btn(0.3, 8.6, 4.5, 0.7, "btn_reset_settings", T("Reset to classroom-safe")))
+	b.WriteString(tooltip("btn_reset_settings", T("No damage, PvP or hunger; peaceful mobs only; explosions keep blocks; students can't fly, survival mode")))
 
 	cc.ShowFormspec("classrooms:instance_settings", b.String())
 }
@@ -724,12 +724,12 @@ func (c *controller) showInstanceRestartConfirm(cc *proxy.ClientConn, instanceID
 	players := c.playersOnInstance(inst.ProxyName)
 
 	var b strings.Builder
-	dialogFrame(&b, 9, 6.4, warning, iconWarning, "Restart "+inst.Title()+"?")
+	dialogFrame(&b, 9, 6.4, warning, iconWarning, T("Restart @1?", inst.Title()))
 	b.WriteString(box(0.5, 1.6, 8, 3.3, colorCard))
-	b.WriteString(coloredLbl(0.85, 2.1, light, "1. Everyone inside goes to the lobby."))
-	b.WriteString(coloredLbl(0.85, 2.6, light, "2. The world restarts with the new rules."))
-	b.WriteString(coloredLbl(0.85, 3.1, light, "3. Everyone is brought back automatically."))
-	b.WriteString(hint(0.85, 3.7, fmt.Sprintf("Players currently inside: %d", len(players))))
+	b.WriteString(coloredLbl(0.85, 2.1, light, T("1. Everyone inside goes to the lobby.")))
+	b.WriteString(coloredLbl(0.85, 2.6, light, T("2. The world restarts with the new rules.")))
+	b.WriteString(coloredLbl(0.85, 3.1, light, T("3. Everyone is brought back automatically.")))
+	b.WriteString(hint(0.85, 3.7, T("Players currently inside: @1", len(players))))
 	if len(players) > 0 {
 		list := strings.Join(players, ", ")
 		if len(list) > 80 {
@@ -737,8 +737,8 @@ func (c *controller) showInstanceRestartConfirm(cc *proxy.ClientConn, instanceID
 		}
 		b.WriteString(hint(0.85, 4.2, list))
 	}
-	b.WriteString(styledBtn(1.0, 5.3, 3.4, 0.75, "btn_confirm_restart", "Restart now", colorActive))
-	b.WriteString(btn(5.0, 5.3, 2.6, 0.75, "btn_back", "Cancel"))
+	b.WriteString(styledBtn(1.0, 5.3, 3.4, 0.75, "btn_confirm_restart", T("Restart now"), colorActive))
+	b.WriteString(btn(5.0, 5.3, 2.6, 0.75, "btn_back", T("Cancel")))
 	cc.ShowFormspec("classrooms:instance_restart", b.String())
 }
 
@@ -776,11 +776,11 @@ func (c *controller) showAdminPanelTab(cc *proxy.ClientConn, activeTab string) {
 
 	var b strings.Builder
 	fsOpen(&b, 14, 8.6)
-	fsHeader(&b, 14, "Global admin", "All worlds, classes and teachers", false, true)
+	fsHeader(&b, 14, T("Global admin"), T("All worlds, classes and teachers"), false, true)
 	tabBar(&b, 0.3, 1.2, 2.4, "btn_admin_tab_"+activeTab, [][2]string{
-		{"btn_admin_tab_instances", "Worlds"},
-		{"btn_admin_tab_classes", "Classes"},
-		{"btn_admin_tab_teachers", "Teachers"},
+		{"btn_admin_tab_instances", T("Worlds")},
+		{"btn_admin_tab_classes", T("Classes")},
+		{"btn_admin_tab_teachers", T("Teachers")},
 	})
 
 	if activeTab == "teachers" {
@@ -800,7 +800,7 @@ func (c *controller) writeAdminInstancesTab(cc *proxy.ClientConn, b *strings.Bui
 
 	c.writeAdminFilters(b, institute, teacher)
 	if len(instances) == 0 {
-		b.WriteString(hint(0.5, 3.35, "No worlds match the current filters."))
+		b.WriteString(hint(0.5, 3.35, T("No worlds match the current filters.")))
 		return
 	}
 	b.WriteString(adminScroll("scr_admin_inst", len(instances)))
@@ -818,7 +818,7 @@ func (c *controller) writeAdminInstancesTab(cc *proxy.ClientConn, b *strings.Bui
 			detail = detail + " · " + inst.ID
 		}
 		b.WriteString(fmt.Sprintf("label[0.6,%g;%s]", iy+0.6, fmtEsc(mcColorize(muted, detail))))
-		b.WriteString(iconBtn(12.2, iy+0.13, 0.6, "open_inst_"+inst.ID, iconGear, "Manage world"))
+		b.WriteString(iconBtn(12.2, iy+0.13, 0.6, "open_inst_"+inst.ID, iconGear, T("Manage world")))
 		iy += 0.95
 	}
 	b.WriteString("scroll_container_end[]")
@@ -830,7 +830,7 @@ func (c *controller) writeAdminClassesTab(cc *proxy.ClientConn, b *strings.Build
 
 	c.writeAdminFilters(b, institute, teacher)
 	if len(classes) == 0 {
-		b.WriteString(hint(0.5, 3.35, "No classes match the current filters."))
+		b.WriteString(hint(0.5, 3.35, T("No classes match the current filters.")))
 		return
 	}
 
@@ -843,12 +843,11 @@ func (c *controller) writeAdminClassesTab(cc *proxy.ClientConn, b *strings.Build
 		b.WriteString(box(0, y, 13.0, 0.85, colorCard))
 		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", y+0.28, fmtEsc(mcColorize(light, cls.Name))))
 		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", y+0.6, fmtEsc(mcColorize(muted,
-			fmt.Sprintf("Owner: %s · %s · %s", cls.CreatedBy, plural(len(students), "student", "students"),
-				plural(len(instances), "world", "worlds"))))))
+			T("Owner: @1 · @2 students · @3 worlds", cls.CreatedBy, len(students), len(instances))))))
 		b.WriteString(styledBtn(10.35, y+0.13, 1.6, 0.6, fmt.Sprintf("open_class_%d", cls.ID), T("Open"), colorPrimary))
 		delName := fmt.Sprintf("del_class_%d", cls.ID)
 		if c.isDeleteArmed(cc.Name(), fmt.Sprintf("class:%d", cls.ID)) {
-			b.WriteString(styledBtn(12.05, y+0.13, 0.85, 0.6, delName, "Sure?", colorDanger))
+			b.WriteString(styledBtn(12.05, y+0.13, 0.85, 0.6, delName, T("Sure?"), colorDanger))
 		} else {
 			b.WriteString(iconBtn(12.2, y+0.13, 0.6, delName, iconClose, T("Delete class")))
 		}
@@ -890,16 +889,16 @@ func scrollbarAt(name string, x, y, h float64, itemCount int, rowStep, topPad fl
 func (c *controller) writeAdminFilters(b *strings.Builder, institute, teacher string) {
 	b.WriteString(box(0.2, 2.05, 13.55, 0.8, colorCard))
 	b.WriteString(fmt.Sprintf("image[0.4,2.22;0.45,0.45;%s]", iconSearch))
-	b.WriteString(hint(1.0, 2.45, "Institute"))
+	b.WriteString(hint(1.0, 2.45, T("Institute")))
 	b.WriteString("field[2.1,2.2;3.1,0.5;admin_filter_institute;;")
 	b.WriteString(fmtEsc(institute))
 	b.WriteString("]")
-	b.WriteString(hint(5.45, 2.45, "Teacher"))
+	b.WriteString(hint(5.45, 2.45, T("Teacher")))
 	b.WriteString("field[6.4,2.2;3.1,0.5;admin_filter_teacher;;")
 	b.WriteString(fmtEsc(teacher))
 	b.WriteString("]")
-	b.WriteString(styledBtn(9.8, 2.2, 1.6, 0.5, "btn_admin_filter_apply", "Filter", colorPrimary))
-	b.WriteString(btn(11.55, 2.2, 1.6, 0.5, "btn_admin_filter_clear", "Clear"))
+	b.WriteString(styledBtn(9.8, 2.2, 1.6, 0.5, "btn_admin_filter_apply", T("Filter"), colorPrimary))
+	b.WriteString(btn(11.55, 2.2, 1.6, 0.5, "btn_admin_filter_clear", T("Clear")))
 }
 
 func (c *controller) writeAdminTeachersTab(b *strings.Builder) {
@@ -907,11 +906,11 @@ func (c *controller) writeAdminTeachersTab(b *strings.Builder) {
 
 	b.WriteString(box(0.2, 2.05, 13.55, 0.8, colorCard))
 	b.WriteString(fmt.Sprintf("image[0.4,2.22;0.45,0.45;%s]", iconPlus))
-	b.WriteString(hint(1.0, 2.45, "Username"))
+	b.WriteString(hint(1.0, 2.45, T("Username")))
 	b.WriteString("field[2.2,2.2;3.1,0.5;new_teacher_name;;]")
-	b.WriteString(hint(5.45, 2.45, "Institute"))
+	b.WriteString(hint(5.45, 2.45, T("Institute")))
 	b.WriteString("field[6.4,2.2;3.1,0.5;new_teacher_institute;;]")
-	b.WriteString(styledBtn(9.8, 2.2, 1.6, 0.5, "btn_admin_add_teacher", "Add", colorPrimary))
+	b.WriteString(styledBtn(9.8, 2.2, 1.6, 0.5, "btn_admin_add_teacher", T("Add"), colorPrimary))
 
 	b.WriteString(adminScroll("scr_admin_teachers", len(teachers)))
 	b.WriteString("scroll_container[0.2,3.0;13.15,5.25;scr_admin_teachers;vertical;0.1]")
@@ -922,9 +921,9 @@ func (c *controller) writeAdminTeachersTab(b *strings.Builder) {
 		b.WriteString(fmt.Sprintf("image[0.2,%g;0.45,0.45;%s]", ty+0.2, iconPlayer))
 		b.WriteString(fmt.Sprintf("label[0.8,%g;%s]", ty+0.42, fmtEsc(t.Username)))
 		b.WriteString(fmt.Sprintf("field[4.1,%g;5.0,0.5;%s;;%s]", ty+0.17, fmtEsc(fieldName), fmtEsc(t.Institute)))
-		b.WriteString(fmt.Sprintf("tooltip[%s;Institute]", fmtEsc(fieldName)))
-		b.WriteString(btn(9.35, ty+0.14, 1.4, 0.58, "save_teacher_"+t.Username, "Save"))
-		b.WriteString(iconBtn(12.2, ty+0.13, 0.6, "rm_teacher_"+t.Username, iconClose, "Remove teacher role"))
+		b.WriteString(tooltip(fieldName, T("Institute")))
+		b.WriteString(btn(9.35, ty+0.14, 1.4, 0.58, "save_teacher_"+t.Username, T("Save")))
+		b.WriteString(iconBtn(12.2, ty+0.13, 0.6, "rm_teacher_"+t.Username, iconClose, T("Remove teacher role")))
 		ty += 0.95
 	}
 	b.WriteString("scroll_container_end[]")
@@ -947,11 +946,11 @@ func (c *controller) peopleFrame(b *strings.Builder, cc *proxy.ClientConn, cls *
 
 func (c *controller) peopleFrameSize(b *strings.Builder, cc *proxy.ClientConn, cls *classData, activeTab string, w, h float64) {
 	fsOpen(b, w, h)
-	fsHeader(b, w, "People", cls.Name, true, true)
-	tabs := [][2]string{{peopleTabStudents, "Students"}}
+	fsHeader(b, w, T("People"), cls.Name, true, true)
+	tabs := [][2]string{{peopleTabStudents, T("Students")}}
 	if c.canManageClass(cls.ID, cc.Name()) {
-		tabs = append(tabs, [2]string{peopleTabGroups, "Groups"},
-			[2]string{peopleTabAssistance, "Assistance"}, [2]string{peopleTabTeachers, "Teachers"})
+		tabs = append(tabs, [2]string{peopleTabGroups, T("Groups")},
+			[2]string{peopleTabAssistance, T("Assistance")}, [2]string{peopleTabTeachers, T("Teachers")})
 	}
 	tabBar(b, 0.3, 1.2, 1.95, activeTab, tabs)
 }
@@ -959,7 +958,7 @@ func (c *controller) peopleFrameSize(b *strings.Builder, cc *proxy.ClientConn, c
 // personList draws a scrollable list of names with a remove button each.
 func personList(b *strings.Builder, y, h float64, names []string, removePrefix, removeTip string) {
 	if len(names) == 0 {
-		b.WriteString(hint(0.6, y+0.4, "Nobody yet."))
+		b.WriteString(hint(0.6, y+0.4, T("Nobody yet.")))
 		return
 	}
 	b.WriteString(scrollbarFor("scr_people", 8.4, y, h, len(names), 0.7, 0.05))
@@ -998,22 +997,22 @@ func (c *controller) showStudentEditor(cc *proxy.ClientConn, classID int) {
 	// ── Left: add students ──
 	b.WriteString(box(0.3, 2.05, 6.6, 2.05, colorCard))
 	b.WriteString(fmt.Sprintf("image[0.55,2.2;0.42,0.42;%s]", iconPlus))
-	b.WriteString(sectionTitle(1.1, 2.42, "Add an existing player"))
-	b.WriteString(hint(0.55, 2.85, "Type the username they log in with."))
+	b.WriteString(sectionTitle(1.1, 2.42, T("ADD AN EXISTING PLAYER")))
+	b.WriteString(hint(0.55, 2.85, T("Type the username they log in with.")))
 	b.WriteString("field[0.55,3.15;4.25,0.65;add_student_name;;]")
 	b.WriteString("field_close_on_enter[add_student_name;false]")
-	b.WriteString(styledBtn(4.95, 3.15, 1.7, 0.65, "btn_add_student", "+ Add", colorPrimary))
+	b.WriteString(styledBtn(4.95, 3.15, 1.7, 0.65, "btn_add_student", T("+ Add"), colorPrimary))
 
 	statsTop := 4.3
 	if c.canManageClass(classID, cc.Name()) {
 		b.WriteString(box(0.3, 4.3, 6.6, 4.35, colorCard))
 		b.WriteString(fmt.Sprintf("image[0.55,4.45;0.42,0.42;%s]", iconPlayer))
-		b.WriteString(sectionTitle(1.1, 4.67, "Create a new account"))
-		b.WriteString(hint(0.55, 5.1, "For students who have never played here."))
-		b.WriteString("field[0.55,5.75;6.1,0.65;new_student_name;Username;]")
-		b.WriteString("pwdfield[0.55,6.85;2.97,0.65;new_student_password;Password (8+ chars)]")
-		b.WriteString("pwdfield[3.68,6.85;2.97,0.65;new_student_confirm;Repeat password]")
-		b.WriteString(styledBtn(0.55, 7.75, 6.1, 0.7, "btn_create_student", "Create and add to the class", colorPrimary))
+		b.WriteString(sectionTitle(1.1, 4.67, T("CREATE A NEW ACCOUNT")))
+		b.WriteString(hint(0.55, 5.1, T("For students who have never played here.")))
+		b.WriteString("field[0.55,5.75;6.1,0.65;new_student_name;" + fmtEsc(T("Username")) + ";]")
+		b.WriteString("pwdfield[0.55,6.85;2.97,0.65;new_student_password;" + fmtEsc(T("Password (8+ chars)")) + "]")
+		b.WriteString("pwdfield[3.68,6.85;2.97,0.65;new_student_confirm;" + fmtEsc(T("Repeat password")) + "]")
+		b.WriteString(styledBtn(0.55, 7.75, 6.1, 0.7, "btn_create_student", T("Create and add to the class"), colorPrimary))
 		for _, field := range []string{"new_student_name", "new_student_password", "new_student_confirm"} {
 			b.WriteString("field_close_on_enter[" + field + ";false]")
 		}
@@ -1031,10 +1030,10 @@ func (c *controller) showStudentEditor(cc *proxy.ClientConn, classID int) {
 		}
 	}
 	b.WriteString(box(0.3, statsTop, 6.6, 11.3-statsTop, colorCard))
-	b.WriteString(sectionTitle(0.55, statsTop+0.3, "This class"))
-	lines := []string{plural(len(students), "student", "students"), fmt.Sprintf("%d online now", online)}
+	b.WriteString(sectionTitle(0.55, statsTop+0.3, T("THIS CLASS")))
+	lines := []string{T("@1 students", len(students)), T("@1 online now", online)}
 	if len(groups) > 0 {
-		lines = append(lines, fmt.Sprintf("%s · %d without a group", plural(len(groups), "group", "groups"), len(students)-grouped))
+		lines = append(lines, T("@1 groups · @2 without a group", len(groups), len(students)-grouped))
 	}
 	for i, line := range lines {
 		if statsTop+0.75+float64(i)*0.45 > 11.1 {
@@ -1045,21 +1044,21 @@ func (c *controller) showStudentEditor(cc *proxy.ClientConn, classID int) {
 
 	// ── Right: the class list ──
 	b.WriteString(box(7.1, 2.05, 9.6, 9.25, colorCard))
-	b.WriteString(sectionTitle(7.35, 2.35, fmt.Sprintf("In this class (%d)", len(students))))
+	b.WriteString(sectionTitle(7.35, 2.35, T("IN THIS CLASS (@1)", len(students))))
 	b.WriteString(fmt.Sprintf("field[7.35,2.6;5.6,0.6;stu_search;;%s]", fmtEsc(view.PeopleSearch)))
 	b.WriteString("field_close_on_enter[stu_search;false]")
-	b.WriteString(tooltip("stu_search", "Search by name, then press Enter"))
-	b.WriteString(iconBtn(13.05, 2.6, 0.6, "stu_search_go", iconSearch, "Search"))
-	b.WriteString(iconBtn(13.75, 2.6, 0.6, "stu_search_clear", iconClose, "Clear the search"))
+	b.WriteString(tooltip("stu_search", T("Search by name, then press Enter")))
+	b.WriteString(iconBtn(13.05, 2.6, 0.6, "stu_search_go", iconSearch, T("Search")))
+	b.WriteString(iconBtn(13.75, 2.6, 0.6, "stu_search_clear", iconClose, T("Clear the search")))
 
 	shown := filterStudents(students, byStudent, "all", view.PeopleSearch)
 	if view.PeopleSearch != "" {
 		b.WriteString(hint(14.5, 2.9, fmt.Sprintf("%d of %d", len(shown), len(students))))
 	}
 	if len(shown) == 0 {
-		msg := "No students match the search."
+		msg := T("No students match the search.")
 		if len(students) == 0 {
-			msg = "No students yet: add them on the left."
+			msg = T("No students yet: add them on the left.")
 		}
 		b.WriteString(hint(7.4, 3.75, msg))
 	}
@@ -1084,9 +1083,9 @@ func (c *controller) showStudentEditor(cc *proxy.ClientConn, classID int) {
 			}
 			b.WriteString(fmt.Sprintf("label[5.55,%g;%s]", ry+0.34, fmtEsc(mcColorize(g.Color, string(name)))))
 		} else if len(groups) > 0 {
-			b.WriteString(fmt.Sprintf("label[5.55,%g;%s]", ry+0.34, fmtEsc(mcColorize(muted, "no group"))))
+			b.WriteString(fmt.Sprintf("label[5.55,%g;%s]", ry+0.34, fmtEsc(mcColorize(muted, T("no group")))))
 		}
-		b.WriteString(iconBtn(8.3, ry+0.09, 0.5, "rm_student_"+s, iconClose, "Remove from class: "+s))
+		b.WriteString(iconBtn(8.3, ry+0.09, 0.5, "rm_student_"+s, iconClose, T("Remove from class: @1", s)))
 		ry += rowStep
 	}
 	b.WriteString("scroll_container_end[]")
@@ -1102,11 +1101,11 @@ func (c *controller) showClassMemberEditor(cc *proxy.ClientConn, classID int, as
 	}
 	members, _ := c.getClassTeachers(classID)
 	tab, formName, fieldName, addButton, removePrefix := peopleTabTeachers, "classrooms:teachers", "add_teacher_name", "btn_add_teacher", "rm_teacher_"
-	explain := "Co-teachers have the same controls as you."
+	explain := T("Co-teachers have the same controls as you.")
 	if assistance {
 		members, _ = c.getClassAssistants(classID)
 		tab, formName, fieldName, addButton, removePrefix = peopleTabAssistance, "classrooms:assistants", "add_assistance_name", "btn_add_assistance", "rm_assistance_"
-		explain = "Assistance can add students and join class worlds."
+		explain = T("Assistance can add students and join class worlds.")
 	}
 
 	var b strings.Builder
@@ -1115,14 +1114,14 @@ func (c *controller) showClassMemberEditor(cc *proxy.ClientConn, classID int, as
 	b.WriteString(hint(0.55, 2.35, explain))
 	b.WriteString(fmt.Sprintf("field[0.55,2.85;5.6,0.55;%s;;]", fieldName))
 	b.WriteString(fmt.Sprintf("field_close_on_enter[%s;false]", fieldName))
-	b.WriteString(styledBtn(6.35, 2.85, 2.1, 0.55, addButton, "+ Add", colorPrimary))
+	b.WriteString(styledBtn(6.35, 2.85, 2.1, 0.55, addButton, T("+ Add"), colorPrimary))
 	listTop := 4.25
 	if !assistance {
-		b.WriteString(hint(0.45, 3.95, "Owner: "+cls.CreatedBy))
+		b.WriteString(hint(0.45, 3.95, T("Owner: @1", cls.CreatedBy)))
 		listTop = 4.45
 	} else {
-		b.WriteString(sectionTitle(0.45, 3.95, fmt.Sprintf("Assistance (%d)", len(members))))
+		b.WriteString(sectionTitle(0.45, 3.95, T("ASSISTANCE (@1)", len(members))))
 	}
-	personList(&b, listTop, 9.4-listTop, members, removePrefix, "Remove")
+	personList(&b, listTop, 9.4-listTop, members, removePrefix, T("Remove"))
 	cc.ShowFormspec(formName, b.String())
 }
