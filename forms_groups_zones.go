@@ -67,7 +67,7 @@ func filterOptions(groups []classGroup, fixed [][2]string) (labels, keys []strin
 	}
 	for _, g := range groups {
 		keys = append(keys, "g:"+strconv.Itoa(g.ID))
-		labels = append(labels, "Group: "+g.Name)
+		labels = append(labels, T("Group: @1", g.Name))
 	}
 	return labels, keys
 }
@@ -130,7 +130,7 @@ func memberPreview(members []string, max int) string {
 
 // ── People → Groups ─────────────────────────────────────────────────────────
 
-var groupEditorFixedFilters = [][2]string{{"all", "All students"}, {"none", "Without group"}, {"online", "Online now"}}
+var groupEditorFixedFilters = [][2]string{{"all", T("All students")}, {"none", T("Without group")}, {"online", T("Online now")}}
 
 func (c *controller) showGroupsEditor(cc *proxy.ClientConn, classID int) {
 	cls, _ := c.getClassByID(classID)

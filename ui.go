@@ -72,7 +72,7 @@ func fsHeader(b *strings.Builder, w float64, title, subtitle string, back, close
 	b.WriteString(box(0, 0, w, 1.0, panel))
 	x := 0.35
 	if back {
-		b.WriteString(iconBtn(0.2, 0.17, 0.66, "btn_back", iconBack, "Back"))
+		b.WriteString(iconBtn(0.2, 0.17, 0.66, "btn_back", iconBack, T("Back")))
 		x = 1.05
 	}
 	b.WriteString(fmt.Sprintf("label[%g,0.38;%s]", x, fmtEsc(mcColorize(light, title))))
@@ -81,7 +81,7 @@ func fsHeader(b *strings.Builder, w float64, title, subtitle string, back, close
 	}
 	if closeBtn {
 		b.WriteString(fmt.Sprintf("image_button_exit[%g,0.17;0.66,0.66;%s;btn_close;]", w-0.86, iconClose))
-		b.WriteString("tooltip[btn_close;Close]")
+		b.WriteString(tooltip("btn_close", T("Close")))
 	}
 	b.WriteString(box(0, 1.0, w, 0.05, accent))
 }
@@ -160,7 +160,11 @@ func statusDot(x, y float64, color string) string {
 
 // sectionTitle draws an uppercase section heading.
 func sectionTitle(x, y float64, text string) string {
-	return coloredLbl(x, y, muted, strings.ToUpper(text))
+	// Translated text cannot be upper-cased here: callers pass it in capitals.
+	if !strings.Contains(text, "\x1b") {
+		text = strings.ToUpper(text)
+	}
+	return coloredLbl(x, y, muted, text)
 }
 
 // hint draws a muted help line.
@@ -195,11 +199,11 @@ func instanceStatusColor(status string) string {
 func instanceStatusLabel(status string) string {
 	switch status {
 	case "running":
-		return "Online"
+		return T("Online")
 	case "provisioning":
-		return "Creating…"
+		return T("Creating…")
 	case "stopped":
-		return "Stopped"
+		return T("Stopped")
 	}
 	return status
 }

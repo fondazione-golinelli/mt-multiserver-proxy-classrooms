@@ -56,7 +56,7 @@ func plural(n int, one, many string) string {
 	return fmt.Sprintf("%d %s", n, many)
 }
 
-var classViewFixedFilters = [][2]string{{"all", "All students"}, {"online", "Online now"}, {"none", "Without group"}}
+var classViewFixedFilters = [][2]string{{"all", T("All students")}, {"online", T("Online now")}, {"none", T("Without group")}}
 
 // ── Panel entry point ──────────────────────────────────────────────────────
 
@@ -78,37 +78,37 @@ func (c *controller) showMainDashboard(cc *proxy.ClientConn) {
 	isFullTeacher := c.isTeacher(name)
 	classes, err := c.getClasses(name)
 	if err != nil {
-		cc.SendChatMsg("[Classrooms] Error loading classes: " + err.Error())
+		cc.SendChatMsg("[Classrooms] " + T("Error loading classes: @1", err.Error()))
 		return
 	}
 
 	var b strings.Builder
 	fsOpen(&b, 12, 9)
-	subtitle := "Assistance dashboard"
+	subtitle := T("Assistance dashboard")
 	if isFullTeacher {
-		subtitle = "Teacher dashboard"
+		subtitle = T("Teacher dashboard")
 	}
 	fsHeader(&b, 12, "Classrooms", subtitle, false, true)
 	if c.isAdmin(name) {
-		b.WriteString(iconBtn(10.35, 0.17, 0.66, "btn_admin_panel", iconGear, "Admin panel: all worlds, classes and teachers"))
+		b.WriteString(iconBtn(10.35, 0.17, 0.66, "btn_admin_panel", iconGear, T("Admin panel: all worlds, classes and teachers")))
 	}
 
 	listY := 2.0
 	if isFullTeacher {
 		b.WriteString(box(0.3, 1.3, 11.4, 0.95, colorCard))
-		b.WriteString(hint(0.55, 1.78, "New class"))
+		b.WriteString(hint(0.55, 1.78, T("New class")))
 		b.WriteString("field[1.9,1.48;6.9,0.6;new_class_name;;]")
 		b.WriteString("field_close_on_enter[new_class_name;false]")
-		b.WriteString(tooltip("new_class_name", "Type a name for the new class, e.g. 3B Science"))
-		b.WriteString(styledBtn(9.0, 1.48, 2.5, 0.6, "btn_create_class", "Create class", colorPrimary))
+		b.WriteString(tooltip("new_class_name", T("Type a name for the new class, e.g. 3B Science")))
+		b.WriteString(styledBtn(9.0, 1.48, 2.5, 0.6, "btn_create_class", T("Create class"), colorPrimary))
 		listY = 2.75
 	}
-	b.WriteString(sectionTitle(0.35, listY, "Your classes"))
+	b.WriteString(sectionTitle(0.35, listY, T("YOUR CLASSES")))
 
 	if len(classes) == 0 {
-		emptyText := "No classes are assigned to you yet."
+		emptyText := T("No classes are assigned to you yet.")
 		if isFullTeacher {
-			emptyText = "No classes yet: type a name above and press Create class."
+			emptyText = T("No classes yet: type a name above and press Create class.")
 		}
 		b.WriteString(hint(0.5, listY+0.8, emptyText))
 		cc.ShowFormspec("classrooms:main", b.String())
@@ -145,17 +145,16 @@ func (c *controller) showMainDashboard(cc *proxy.ClientConn) {
 		}
 		b.WriteString(statusDot(0.3, y+0.66, dot))
 		b.WriteString(fmt.Sprintf("label[0.65,%g;%s]", y+0.77, fmtEsc(mcColorize(muted,
-			fmt.Sprintf("%d/%s online   ·   %s running", online, plural(len(students), "student", "students"),
-				plural(worldsOnline, "world", "worlds"))))))
+			T("@1/@2 students online   ·   @3 worlds running", online, len(students), worldsOnline)))))
 
-		b.WriteString(styledBtn(7.55, y+0.22, 1.9, 0.62, fmt.Sprintf("open_class_%d", cls.ID), "Open", colorPrimary))
+		b.WriteString(styledBtn(7.55, y+0.22, 1.9, 0.62, fmt.Sprintf("open_class_%d", cls.ID), T("Open"), colorPrimary))
 		if cls.CreatedBy == name || c.isAdmin(name) {
 			delName := fmt.Sprintf("del_class_%d", cls.ID)
 			if c.isDeleteArmed(name, fmt.Sprintf("class:%d", cls.ID)) {
-				b.WriteString(styledBtn(9.55, y+0.22, 1.3, 0.62, delName, "Delete?", colorDanger))
-				b.WriteString(fmt.Sprintf("tooltip[%s;Click again to delete this class permanently]", delName))
+				b.WriteString(styledBtn(9.55, y+0.22, 1.3, 0.62, delName, T("Delete?"), colorDanger))
+				b.WriteString(tooltip(delName, T("Click again to delete this class permanently")))
 			} else {
-				b.WriteString(iconBtn(10.2, y+0.22, 0.62, delName, iconClose, "Delete class"))
+				b.WriteString(iconBtn(10.2, y+0.22, 0.62, delName, iconClose, T("Delete class")))
 			}
 		}
 		y += 1.15
@@ -194,9 +193,9 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 
 	var b strings.Builder
 	fsOpen(&b, 16, 9.6)
-	subtitle := fmt.Sprintf("%d/%s online", online, plural(len(students), "student", "students"))
+	subtitle := T("@1/@2 students online", online, len(students))
 	if origin == viewOriginAdminClasses {
-		subtitle += "   ·   Owner: " + cls.CreatedBy
+		subtitle += "   ·   " + T("Owner: @1", cls.CreatedBy)
 	}
 	fsHeader(&b, 16, cls.Name, subtitle, true, true)
 
@@ -204,43 +203,43 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 	b.WriteString(box(0.2, 1.3, 8.6, 8.1, colorCard))
 	listY := 2.35
 	if canManage {
-		b.WriteString(sectionTitle(0.45, 1.6, "Live controls (online students)"))
+		b.WriteString(sectionTitle(0.45, 1.6, T("LIVE CONTROLS (ONLINE STUDENTS)")))
 		frozen := c.isClassFrozen(classID)
 		watching := c.isClassWatching(classID, cc.Name())
-		freezeCaption := "Freeze"
+		freezeCaption := T("Freeze")
 		if frozen {
-			freezeCaption = "Unfreeze"
+			freezeCaption = T("Unfreeze")
 		}
-		watchCaption := "Look at me"
+		watchCaption := T("Look at me")
 		if watching {
-			watchCaption = "Stop looking"
+			watchCaption = T("Stop looking")
 		}
 		actionTile(&b, 0.45, 1.95, 2.6, "btn_toggle_freeze", iconFreeze, freezeCaption,
-			"Stops every online student from moving. Click again to release them.", frozen)
-		actionTile(&b, 3.2, 1.95, 2.6, "btn_gather_all", iconGather, "Bring here",
-			"Teleports every online student around you.", false)
+			T("Stops every online student from moving. Click again to release them."), frozen)
+		actionTile(&b, 3.2, 1.95, 2.6, "btn_gather_all", iconGather, T("Bring here"),
+			T("Teleports every online student around you."), false)
 		actionTile(&b, 5.95, 1.95, 2.6, "btn_toggle_watch", iconEye, watchCaption,
-			"Turns every online student's camera towards you.", watching)
+			T("Turns every online student's camera towards you."), watching)
 		listY = 4.0
 	}
 
-	b.WriteString(sectionTitle(0.45, listY, "Students"))
-	b.WriteString(styledBtn(5.55, listY-0.3, 3.0, 0.58, "btn_people", "Manage people", colorButton))
-	b.WriteString(tooltip("btn_people", "Add or remove students, create student accounts, and manage groups, assistance and teachers"))
+	b.WriteString(sectionTitle(0.45, listY, T("STUDENTS")))
+	b.WriteString(styledBtn(5.55, listY-0.3, 3.0, 0.58, "btn_people", T("Manage people"), colorButton))
+	b.WriteString(tooltip("btn_people", T("Add or remove students, create student accounts, and manage groups, assistance and teachers")))
 	groups, _ := c.getGroups(classID)
 	byStudent := groupByStudent(groups)
 	view := c.studentList(cc.Name(), classID)
 	filterLabels, filterKeys := filterOptions(groups, classViewFixedFilters)
 	b.WriteString(fmt.Sprintf("dropdown[2.1,%g;3.3,0.58;cls_filter;%s;%d;true]",
 		listY-0.3, dropdownItems(filterLabels), indexOf(filterKeys, view.ClassFilter)))
-	b.WriteString(tooltip("cls_filter", "Show only some students"))
+	b.WriteString(tooltip("cls_filter", T("Show only some students")))
 	shown := onlineFirst(filterStudents(students, byStudent, view.ClassFilter, ""))
 	listTop := listY + 0.4
 	listH := 9.25 - listTop
 	if len(students) == 0 {
-		b.WriteString(hint(0.6, listTop+0.4, "No students yet: use Manage people to add them."))
+		b.WriteString(hint(0.6, listTop+0.4, T("No students yet: use Manage people to add them.")))
 	} else if len(shown) == 0 {
-		b.WriteString(hint(0.6, listTop+0.4, "No students match this filter."))
+		b.WriteString(hint(0.6, listTop+0.4, T("No students match this filter.")))
 	}
 	b.WriteString(scrollbarAt("scr_students", 8.45, listTop, listH, len(shown), 0.7, 0.05, view.Scroll["scr_students"]))
 	b.WriteString(fmt.Sprintf("scroll_container[0.4,%g;8.0,%g;scr_students;vertical;0.1]", listTop, listH))
@@ -263,12 +262,12 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 			b.WriteString(fmt.Sprintf("label[4.25,%g;%s]", sy+0.31, fmtEsc(mcColorize(g.Color, string(name)))))
 		}
 		if isOnline {
-			b.WriteString(iconBtn(6.55, sy+0.06, 0.5, "tp_to_"+s, iconTeleport, "Teleport to "+s))
+			b.WriteString(iconBtn(6.55, sy+0.06, 0.5, "tp_to_"+s, iconTeleport, T("Teleport to @1", s)))
 			if canManage {
-				b.WriteString(iconBtn(7.2, sy+0.06, 0.5, "watch_"+s, iconEye, "Make "+s+" look at you"))
+				b.WriteString(iconBtn(7.2, sy+0.06, 0.5, "watch_"+s, iconEye, T("Make @1 look at you", s)))
 			}
 		} else {
-			b.WriteString(fmt.Sprintf("label[6.55,%g;%s]", sy+0.31, fmtEsc(mcColorize(muted, "offline"))))
+			b.WriteString(fmt.Sprintf("label[6.55,%g;%s]", sy+0.31, fmtEsc(mcColorize(muted, T("offline")))))
 		}
 		sy += 0.7
 	}
@@ -276,7 +275,7 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 
 	// Right column: class worlds.
 	b.WriteString(box(9.0, 1.3, 6.8, 8.1, colorCard))
-	b.WriteString(sectionTitle(9.25, 1.6, "Class worlds"))
+	b.WriteString(sectionTitle(9.25, 1.6, T("CLASS WORLDS")))
 	worlds := instances
 	if !canManage {
 		worlds = worlds[:0:0]
@@ -298,8 +297,8 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 		worldTop = 4.65
 	}
 	if canManage {
-		b.WriteString(styledBtn(9.25, worldTop-0.05, 6.3, 0.65, "btn_create_instance", "+ New class world", colorPrimary))
-		b.WriteString(tooltip("btn_create_instance", "Create a new world from a map template for this class"))
+		b.WriteString(styledBtn(9.25, worldTop-0.05, 6.3, 0.65, "btn_create_instance", T("+ New class world"), colorPrimary))
+		b.WriteString(tooltip("btn_create_instance", T("Create a new world from a map template for this class")))
 		worldTop += 0.8
 	}
 	worldBottom := 9.25
@@ -307,9 +306,9 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 		worldBottom = 8.4
 	}
 	if len(worlds) == 0 {
-		msg := "No class worlds are running right now."
+		msg := T("No class worlds are running right now.")
 		if canManage {
-			msg = "No worlds yet: press + New class world."
+			msg = T("No worlds yet: press + New class world.")
 		}
 		b.WriteString(hint(9.3, worldTop+0.4, msg))
 	}
@@ -332,26 +331,26 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 		if inst.Status == "running" {
 			here := cc.ServerName() == inst.ProxyName
 			if !here {
-				b.WriteString(styledBtn(bx, iy+0.93, 1.5, 0.42, "join_inst_"+inst.ID, "Join", colorPrimary))
-				b.WriteString(fmt.Sprintf("tooltip[join_inst_%s;Go to this world]", inst.ID))
+				b.WriteString(styledBtn(bx, iy+0.93, 1.5, 0.42, "join_inst_"+inst.ID, T("Join"), colorPrimary))
+				b.WriteString(tooltip("join_inst_"+inst.ID, T("Go to this world")))
 				bx += 1.6
 			} else {
-				b.WriteString(fmt.Sprintf("label[%g,%g;%s]", bx, iy+1.14, fmtEsc(mcColorize(success, "You are here"))))
+				b.WriteString(fmt.Sprintf("label[%g,%g;%s]", bx, iy+1.14, fmtEsc(mcColorize(success, T("You are here")))))
 				bx += 2.1
 			}
 			if canManage {
-				b.WriteString(btn(bx, iy+0.93, 2.0, 0.42, "bring_inst_"+inst.ID, "Bring class"))
-				b.WriteString(fmt.Sprintf("tooltip[bring_inst_%s;Move you and every online student of this class into this world]", inst.ID))
+				b.WriteString(btn(bx, iy+0.93, 2.0, 0.42, "bring_inst_"+inst.ID, T("Bring class")))
+				b.WriteString(tooltip("bring_inst_"+inst.ID, T("Move you and every online student of this class into this world")))
 			}
 		}
 		if canManage {
-			b.WriteString(iconBtn(5.45, iy+0.15, 0.55, "open_inst_"+inst.ID, iconGear, "Manage: start/stop, rules, time & weather"))
+			b.WriteString(iconBtn(5.45, iy+0.15, 0.55, "open_inst_"+inst.ID, iconGear, T("Manage: start/stop, rules, time & weather")))
 		}
 		iy += 1.55
 	}
 	b.WriteString("scroll_container_end[]")
 	if canManage {
-		b.WriteString(btn(9.25, 8.6, 6.3, 0.6, "btn_return_hub", "Return to HUB"))
+		b.WriteString(btn(9.25, 8.6, 6.3, 0.6, "btn_return_hub", T("Return to HUB")))
 	}
 
 	cc.ShowFormspec("classrooms:class", b.String())
@@ -360,9 +359,9 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 // onOff renders a boolean rule for the current-world summary.
 func onOff(v bool) string {
 	if v {
-		return "on"
+		return T("on")
 	}
-	return "off"
+	return T("off")
 }
 
 // writeCurrentWorldCard highlights the class world the viewer is standing in,
@@ -370,37 +369,37 @@ func onOff(v bool) string {
 func (c *controller) writeCurrentWorldCard(b *strings.Builder, inst *instanceData, canManage bool) {
 	b.WriteString(box(9.2, 1.95, 6.4, 2.5, colorCurrent))
 	b.WriteString(box(9.2, 1.95, 0.08, 2.5, colorActive))
-	b.WriteString(coloredLbl(9.45, 2.22, warning, "YOU ARE IN THIS WORLD"))
+	b.WriteString(coloredLbl(9.45, 2.22, warning, T("YOU ARE IN THIS WORLD")))
 	if c.isRestartPending(inst.ID) {
 		b.WriteString(fmt.Sprintf("image[13.2,2.04;0.36,0.36;%s]", iconWarning))
-		b.WriteString(coloredLbl(13.65, 2.22, warning, "restart needed"))
+		b.WriteString(coloredLbl(13.65, 2.22, warning, T("restart needed")))
 	}
 	b.WriteString(coloredLbl(9.45, 2.62, light, inst.Title()))
 
 	if settings, err := c.getInstanceSettingsOrDefault(inst.ID); err == nil {
-		b.WriteString(hint(9.45, 3.02, fmt.Sprintf("Hurt: %s  ·  PvP: %s  ·  Hunger: %s",
+		b.WriteString(hint(9.45, 3.02, T("Hurt: @1  ·  PvP: @2  ·  Hunger: @3",
 			onOff(settings.EnableDamage), onOff(settings.EnablePVP), onOff(settings.EnableHunger))))
-		mobs := "no mobs"
+		mobs := T("no mobs")
 		if settings.MobsSpawn && settings.OnlyPeacefulMobs {
-			mobs = "peaceful mobs"
+			mobs = T("peaceful mobs")
 		} else if settings.MobsSpawn {
-			mobs = "all mobs"
+			mobs = T("all mobs")
 		}
-		timeState := "time flowing"
+		timeState := T("time flowing")
 		if c.isInstanceTimeStopped(inst.ID) {
-			timeState = "time paused"
+			timeState = T("time paused")
 		}
 		if settings.WorldLocked {
-			timeState += "  ·  world locked"
+			timeState += "  ·  " + T("world locked")
 		}
-		b.WriteString(hint(9.45, 3.38, "Mobs: "+mobs+"  ·  "+timeState))
+		b.WriteString(hint(9.45, 3.38, T("Mobs: @1", mobs)+"  ·  "+timeState))
 	}
 
 	if canManage {
-		b.WriteString(styledBtn(9.45, 3.75, 2.4, 0.52, "cur_rules_"+inst.ID, "Rules", colorButton))
-		b.WriteString(tooltip("cur_rules_"+inst.ID, "Damage, PvP, hunger, mobs and arrival point of this world"))
-		b.WriteString(styledBtn(11.95, 3.75, 2.85, 0.52, "cur_world_"+inst.ID, "Time & weather", colorButton))
-		b.WriteString(iconBtn(14.95, 3.75, 0.52, "open_inst_"+inst.ID, iconGear, "Manage this world"))
+		b.WriteString(styledBtn(9.45, 3.75, 2.4, 0.52, "cur_rules_"+inst.ID, T("Rules"), colorButton))
+		b.WriteString(tooltip("cur_rules_"+inst.ID, T("Damage, PvP, hunger, mobs and arrival point of this world")))
+		b.WriteString(styledBtn(11.95, 3.75, 2.85, 0.52, "cur_world_"+inst.ID, T("Time & weather"), colorButton))
+		b.WriteString(iconBtn(14.95, 3.75, 0.52, "open_inst_"+inst.ID, iconGear, T("Manage this world")))
 	}
 }
 
@@ -498,7 +497,7 @@ func (c *controller) showInstanceReady(cc *proxy.ClientConn, inst *instanceData,
 	actionTile(&b, x, 3.7, tileW, "btn_ready_hop_me", iconEnter, "Go there", "Join the world yourself", false)
 	x += tileW + 0.45
 	if inst.ClassID != nil {
-		actionTile(&b, x, 3.7, tileW, "btn_ready_hop_class", iconPeople, "Bring class", "Move you and every online student into the world", false)
+		actionTile(&b, x, 3.7, tileW, "btn_ready_hop_class", iconPeople, T("Bring class"), "Move you and every online student into the world", false)
 		x += tileW + 0.45
 	}
 	actionTile(&b, x, 3.7, tileW, "btn_ready_open", iconGear, "Manage", "Rules, time & weather, start/stop", false)
@@ -541,8 +540,8 @@ func instanceFrame(b *strings.Builder, inst *instanceData, activeTab string) {
 	fsHeader(b, 11, inst.Title(), subtitle, true, true)
 	tabBar(b, 0.3, 1.3, 3.4, activeTab, [][2]string{
 		{instTabOverview, "Overview"},
-		{instTabRules, "Rules"},
-		{instTabWorld, "Time & weather"},
+		{instTabRules, T("Rules")},
+		{instTabWorld, T("Time & weather")},
 	})
 }
 
@@ -571,11 +570,11 @@ func (c *controller) showInstanceViewWithOrigin(cc *proxy.ClientConn, instanceID
 		here := cc.ServerName() == inst.ProxyName
 		joinCaption := "Go there"
 		if here {
-			joinCaption = "You are here"
+			joinCaption = T("You are here")
 		}
 		actionTile(&b, 0.5, 2.3, 3.2, "btn_hop_me", iconEnter, joinCaption, "Join this world yourself", here)
 		if inst.ClassID != nil {
-			actionTile(&b, 3.9, 2.3, 3.2, "btn_hop_class", iconPeople, "Bring class",
+			actionTile(&b, 3.9, 2.3, 3.2, "btn_hop_class", iconPeople, T("Bring class"),
 				"Move you and every online student of the class into this world", false)
 		}
 		actionTile(&b, 7.3, 2.3, 3.2, "btn_inst_stop", iconClose, "Stop world",
@@ -846,12 +845,12 @@ func (c *controller) writeAdminClassesTab(cc *proxy.ClientConn, b *strings.Build
 		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", y+0.6, fmtEsc(mcColorize(muted,
 			fmt.Sprintf("Owner: %s · %s · %s", cls.CreatedBy, plural(len(students), "student", "students"),
 				plural(len(instances), "world", "worlds"))))))
-		b.WriteString(styledBtn(10.35, y+0.13, 1.6, 0.6, fmt.Sprintf("open_class_%d", cls.ID), "Open", colorPrimary))
+		b.WriteString(styledBtn(10.35, y+0.13, 1.6, 0.6, fmt.Sprintf("open_class_%d", cls.ID), T("Open"), colorPrimary))
 		delName := fmt.Sprintf("del_class_%d", cls.ID)
 		if c.isDeleteArmed(cc.Name(), fmt.Sprintf("class:%d", cls.ID)) {
 			b.WriteString(styledBtn(12.05, y+0.13, 0.85, 0.6, delName, "Sure?", colorDanger))
 		} else {
-			b.WriteString(iconBtn(12.2, y+0.13, 0.6, delName, iconClose, "Delete class"))
+			b.WriteString(iconBtn(12.2, y+0.13, 0.6, delName, iconClose, T("Delete class")))
 		}
 		y += 0.95
 	}
@@ -1070,9 +1069,9 @@ func (c *controller) showStudentEditor(cc *proxy.ClientConn, classID int) {
 	ry := 0.05
 	for _, s := range shown {
 		b.WriteString(box(0, ry, 8.95, 0.68, colorRow))
-		dot, state := muted, "offline"
+		dot, state := muted, T("offline")
 		if proxy.Find(s) != nil {
-			dot, state = success, "online"
+			dot, state = success, T("online")
 		}
 		b.WriteString(statusDot(0.2, ry+0.23, dot))
 		b.WriteString(fmt.Sprintf("label[0.6,%g;%s]", ry+0.34, fmtEsc(s)))

@@ -34,7 +34,7 @@ func TestFilterStudents(t *testing.T) {
 
 func TestFilterOptionsAndScroll(t *testing.T) {
 	labels, keys := filterOptions([]classGroup{{ID: 7, Name: "Red"}}, groupEditorFixedFilters)
-	if labels[3] != "Group: Red" || keys[3] != "g:7" || indexOf(keys, "g:7") != 4 || indexOf(keys, "g:99") != 1 {
+	if labels[3] != T("Group: @1", "Red") || keys[3] != "g:7" || indexOf(keys, "g:7") != 4 || indexOf(keys, "g:99") != 1 {
 		t.Fatalf("unexpected options %v %v", labels, keys)
 	}
 	for in, want := range map[string]int{"CHG:12": 12, "VAL:3": 3, "0": 0} {
