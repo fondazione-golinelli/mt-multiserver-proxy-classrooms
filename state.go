@@ -18,12 +18,6 @@ type classData struct {
 	CreatedAt time.Time
 }
 
-type teacherData struct {
-	Username  string
-	Institute string
-	CreatedAt time.Time
-}
-
 type instanceData struct {
 	ID           string
 	ClassID      *int // nil = standalone
@@ -103,48 +97,29 @@ func (c *controller) addTeacher(name string) error {
 	return err
 }
 
-func (c *controller) addTeacherWithInstitute(name, institute string) error {
-	_, err := c.db.Exec(
-		"INSERT INTO teachers (username, institute) VALUES (?, ?) ON DUPLICATE KEY UPDATE institute = VALUES(institute)",
-		name, institute)
-	return err
+func (c *controller) removeTeacher(name string) (bool, string) {
+	var owned int
+	if err := c.db.QueryRow("SELECT COUNT(*) FROM classes WHERE created_by = ?", name).Scan(&owned); err != nil {
+		return false, T("Database error.")
+	}
+	if owned > 0 {
+		return false, T("@1 owns @2 classes: delete them first.", name, owned)
+	}
+	if _, err := c.db.Exec("DELETE FROM teachers WHERE username = ?", name); err != nil {
+		return false, T("Database error.")
+	}
+	return true, ""
 }
 
-func (c *controller) removeTeacher(name string) error {
-	_, err := c.db.Exec("DELETE FROM teachers WHERE username = ?", name)
-	return err
-}
-
-func (c *controller) updateTeacherInstitute(name, institute string) error {
-	_, err := c.db.Exec("UPDATE teachers SET institute = ? WHERE username = ?", institute, name)
-	return err
-}
-
+// getTeacherInstitute returns the name of the teacher's institute, or "".
 func (c *controller) getTeacherInstitute(name string) (string, error) {
 	var institute string
-	err := c.db.QueryRow("SELECT institute FROM teachers WHERE username = ?", name).Scan(&institute)
+	err := c.db.QueryRow(`SELECT COALESCE(i.name, '') FROM teachers t
+		LEFT JOIN institutes i ON i.id = t.institute_id WHERE t.username = ?`, name).Scan(&institute)
 	if err == sql.ErrNoRows {
 		return "", nil
 	}
 	return institute, err
-}
-
-func (c *controller) listTeacherRecords() ([]teacherData, error) {
-	rows, err := c.db.Query("SELECT username, institute, created_at FROM teachers ORDER BY username")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var result []teacherData
-	for rows.Next() {
-		var td teacherData
-		if err := rows.Scan(&td.Username, &td.Institute, &td.CreatedAt); err != nil {
-			return nil, err
-		}
-		result = append(result, td)
-	}
-	return result, rows.Err()
 }
 
 func (c *controller) listTeachers() ([]string, error) {
@@ -290,14 +265,15 @@ func (c *controller) addClassTeacher(classID int, teacherName string) (bool, str
 	if err != nil {
 		return false, T("Database error.")
 	}
-	institute, _ := c.getTeacherInstitute(cls.CreatedBy)
 	tx, err := c.db.Begin()
 	if err != nil {
 		return false, T("Failed to link teacher.")
 	}
 	defer tx.Rollback()
+	// A new teacher joins the institute of the class owner.
 	if _, err := tx.Exec(
-		"INSERT IGNORE INTO teachers (username, institute) VALUES (?, ?)", teacherName, institute); err != nil {
+		`INSERT IGNORE INTO teachers (username, institute_id)
+			SELECT ?, institute_id FROM teachers WHERE username = ?`, teacherName, cls.CreatedBy); err != nil {
 		return false, T("Failed to register teacher.")
 	}
 	// Assigning the full teacher role upgrades an existing Assistance
@@ -426,11 +402,13 @@ func (c *controller) getAllClasses() ([]classData, error) {
 }
 
 func (c *controller) getFilteredClasses(institute, teacher string) ([]classData, error) {
-	query := "SELECT c.id, c.name, c.created_by, c.created_at FROM classes c LEFT JOIN teachers t ON t.username = c.created_by WHERE 1=1"
+	query := `SELECT c.id, c.name, c.created_by, c.created_at FROM classes c
+		LEFT JOIN teachers t ON t.username = c.created_by
+		LEFT JOIN institutes i ON i.id = t.institute_id WHERE 1=1`
 	var args []interface{}
 	if institute != "" {
-		query += " AND COALESCE(t.institute, '') = ?"
-		args = append(args, institute)
+		query += " AND COALESCE(i.name, '') = ?"
+		args = append(args, instituteFilterValue(institute))
 	}
 	if teacher != "" {
 		query += " AND c.created_by = ?"
@@ -487,6 +465,11 @@ func (c *controller) createClass(teacherName, className string) (bool, string) {
 	if className == "" || len(className) > 100 {
 		return false, T("Class name must be 1-100 characters.")
 	}
+	if !c.isAdmin(teacherName) {
+		if msg := c.classLimitMessage(teacherName); msg != "" {
+			return false, msg
+		}
+	}
 
 	existing, err := c.getClassByName(className)
 	if err != nil {
@@ -517,9 +500,17 @@ func (c *controller) deleteClass(teacherName string, classID int) (bool, string)
 		return false, T("You don't own this class.")
 	}
 
+	worlds, err := c.getInstancesForClass(classID)
+	if err != nil {
+		return false, T("Database error.")
+	}
 	_, err = c.db.Exec("DELETE FROM classes WHERE id = ?", classID)
 	if err != nil {
 		return false, T("Failed to delete class.")
+	}
+	c.deleteInstancesAsync(worlds)
+	if len(worlds) > 0 {
+		return true, T("Class deleted. Deleting its @1 worlds...", len(worlds))
 	}
 	return true, T("Class deleted.")
 }
@@ -723,7 +714,7 @@ func (c *controller) getFilteredActiveInstances(institute, teacher string) ([]in
 	var args []interface{}
 	if institute != "" {
 		query += " AND institute = ?"
-		args = append(args, institute)
+		args = append(args, instituteFilterValue(institute))
 	}
 	if teacher != "" {
 		query += " AND created_by = ?"
@@ -1096,6 +1087,17 @@ func (c *controller) getAdminTab(player string) string {
 	return c.runtime.adminTab[player]
 }
 
+// noInstituteFilter is the admin institute filter for "No institute": the
+// empty string already means "all institutes".
+const noInstituteFilter = "\x00none"
+
+func instituteFilterValue(institute string) string {
+	if institute == noInstituteFilter {
+		return ""
+	}
+	return institute
+}
+
 func (c *controller) setAdminFilters(player, institute, teacher string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -1109,6 +1111,32 @@ func (c *controller) getAdminFilters(player string) (string, string) {
 	return c.runtime.adminInstituteFilter[player], c.runtime.adminTeacherFilter[player]
 }
 
+// passwordTarget is the account in a player's password dialog and the screen
+// the dialog returns to.
+type passwordTarget struct {
+	Name    string
+	ClassID int // student editor of this class; 0 = admin Accounts tab
+}
+
+func (c *controller) setPasswordTarget(player string, target passwordTarget) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.runtime.passwordTarget[player] = target
+}
+
+func (c *controller) getPasswordTarget(player string) (passwordTarget, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	t, ok := c.runtime.passwordTarget[player]
+	return t, ok
+}
+
+func (c *controller) clearPasswordTarget(player string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.runtime.passwordTarget, player)
+}
+
 func (c *controller) clearActiveInstance(player string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -1117,6 +1145,8 @@ func (c *controller) clearActiveInstance(player string) {
 	delete(c.runtime.adminTab, player)
 	delete(c.runtime.adminInstituteFilter, player)
 	delete(c.runtime.adminTeacherFilter, player)
+	delete(c.runtime.adminUsers, player)
+	delete(c.runtime.passwordTarget, player)
 	delete(c.runtime.confirmDelete, player)
 	delete(c.runtime.zoneEdits, player)
 	delete(c.runtime.worldToolsGroup, player)

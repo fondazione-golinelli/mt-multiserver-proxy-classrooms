@@ -134,6 +134,8 @@ type runtimeState struct {
 	adminTab             map[string]string           // player -> current admin tab
 	adminInstituteFilter map[string]string           // player -> current admin institute filter
 	adminTeacherFilter   map[string]string           // player -> current admin teacher filter
+	adminUsers           map[string]*adminUsersView  // player -> admin Users tab filters and drafts
+	passwordTarget       map[string]passwordTarget   // player -> account in the password dialog
 	pendingOps           map[string]struct{}         // player -> in-flight operation
 	confirmDelete        map[string]string           // player -> "class:<id>" / "instance:<id>" awaiting a second click
 	restartPending       map[string]bool             // instance ID -> saved settings need a restart to apply
@@ -162,6 +164,8 @@ func newRuntimeState() runtimeState {
 		adminTab:             make(map[string]string),
 		adminInstituteFilter: make(map[string]string),
 		adminTeacherFilter:   make(map[string]string),
+		adminUsers:           make(map[string]*adminUsersView),
+		passwordTarget:       make(map[string]passwordTarget),
 		pendingOps:           make(map[string]struct{}),
 		confirmDelete:        make(map[string]string),
 		restartPending:       make(map[string]bool),
@@ -229,6 +233,7 @@ func init() {
 		// Startup reconciliation and background tasks
 		c.reconcileInstances()
 		c.startStatusChecker()
+		c.startVisitTracker()
 
 		// Register hooks
 		proxy.RegisterOnChatMsg(c.onChatMsg)

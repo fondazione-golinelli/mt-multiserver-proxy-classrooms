@@ -120,8 +120,8 @@ func (c *controller) handleTeacherRemoveCmd(cc *proxy.ClientConn, args ...string
 		return T("Usage: >teacher_remove <username>")
 	}
 	name := args[0]
-	if err := c.removeTeacher(name); err != nil {
-		return T("Error removing teacher: @1", err.Error())
+	if ok, msg := c.removeTeacher(name); !ok {
+		return msg
 	}
 	if proxy.Find(name) != nil {
 		c.scheduleReapplyStates(name, 0)

@@ -152,6 +152,29 @@ func migrateDB(db *sql.DB) error {
 			completed_at TIMESTAMP    NULL DEFAULT NULL,
 			FOREIGN KEY (zone_id) REFERENCES instance_zones(id) ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+		`CREATE TABLE IF NOT EXISTS institutes (
+			id                   INT AUTO_INCREMENT PRIMARY KEY,
+			name                 VARCHAR(100) NOT NULL UNIQUE,
+			max_classes          INT NOT NULL DEFAULT 0,
+			max_worlds_per_class INT NOT NULL DEFAULT 0,
+			created_at           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+		`CREATE TABLE IF NOT EXISTS instance_visits (
+			id          INT AUTO_INCREMENT PRIMARY KEY,
+			instance_id VARCHAR(100) NOT NULL,
+			username    VARCHAR(50)  NOT NULL,
+			visited_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			KEY idx_instance_visits (instance_id, visited_at),
+			FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+		`CREATE TABLE IF NOT EXISTS account_creators (
+			username   VARCHAR(50) PRIMARY KEY,
+			created_by VARCHAR(50) NOT NULL,
+			created_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 	}
 
 	for _, stmt := range migrations {
@@ -238,7 +261,34 @@ func migrateDB(db *sql.DB) error {
 		}
 	}
 
+	if err := addColumnIfMissing(db, "teachers", "institute_id",
+		`ALTER TABLE teachers ADD COLUMN institute_id INT NULL DEFAULT NULL AFTER institute,
+			ADD CONSTRAINT fk_teachers_institute FOREIGN KEY (institute_id) REFERENCES institutes(id) ON DELETE SET NULL`); err != nil {
+		return err
+	}
+	if err := migrateTeacherInstitutes(db); err != nil {
+		return err
+	}
+
 	log.Printf("[%s] database migration complete", pluginName)
+	return nil
+}
+
+// migrateTeacherInstitutes turns the free-text teachers.institute of older
+// versions into institutes rows. The text is cleared once linked, so later
+// changes made through institute_id are never overridden.
+func migrateTeacherInstitutes(db *sql.DB) error {
+	for _, stmt := range []string{
+		`INSERT IGNORE INTO institutes (name)
+			SELECT DISTINCT TRIM(institute) FROM teachers WHERE TRIM(institute) <> ''`,
+		`UPDATE teachers t JOIN institutes i ON i.name = TRIM(t.institute)
+			SET t.institute_id = i.id WHERE TRIM(t.institute) <> '' AND t.institute_id IS NULL`,
+		`UPDATE teachers SET institute = '' WHERE institute <> ''`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("migrate institutes: %w", err)
+		}
+	}
 	return nil
 }
 

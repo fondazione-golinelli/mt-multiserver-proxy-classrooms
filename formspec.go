@@ -96,14 +96,33 @@ func (c *controller) showMainDashboard(cc *proxy.ClientConn) {
 	listY := 2.0
 	if isFullTeacher {
 		b.WriteString(box(0.3, 1.3, 11.4, 0.95, colorCard))
-		b.WriteString(hint(0.55, 1.78, T("New class")))
-		b.WriteString("field[1.9,1.48;6.9,0.6;new_class_name;;]")
-		b.WriteString("field_close_on_enter[new_class_name;false]")
-		b.WriteString(tooltip("new_class_name", T("Type a name for the new class, e.g. 3B Science")))
-		b.WriteString(styledBtn(9.0, 1.48, 2.5, 0.6, "btn_create_class", T("Create class"), colorPrimary))
+		if limitMsg := c.classLimitMessage(name); limitMsg != "" && !c.isAdmin(name) {
+			b.WriteString(fmt.Sprintf("image[0.55,1.53;0.45,0.45;%s]", iconWarning))
+			b.WriteString(coloredLbl(1.15, 1.78, warning, T("Class limit reached")))
+			b.WriteString(disabledBtn(9.0, 1.48, 2.5, 0.6, T("Create class"), limitMsg))
+		} else {
+			b.WriteString(hint(0.55, 1.78, T("New class")))
+			b.WriteString("field[1.9,1.48;6.9,0.6;new_class_name;;]")
+			b.WriteString("field_close_on_enter[new_class_name;false]")
+			b.WriteString(tooltip("new_class_name", T("Type a name for the new class, e.g. 3B Science")))
+			b.WriteString(styledBtn(9.0, 1.48, 2.5, 0.6, "btn_create_class", T("Create class"), colorPrimary))
+		}
 		listY = 2.75
 	}
 	b.WriteString(sectionTitle(0.35, listY, T("YOUR CLASSES")))
+	if isFullTeacher {
+		if in, used, ok := c.instituteClassUsage(name); ok {
+			usage := T("@1 · classes: @2 (no limit)", in.Name, used)
+			color := muted
+			if in.MaxClasses > 0 {
+				usage = T("@1 · classes: @2 of @3", in.Name, used, in.MaxClasses)
+				if used >= in.MaxClasses {
+					color = warning
+				}
+			}
+			b.WriteString(fmt.Sprintf("label[4.0,%g;%s]", listY, fmtEsc(mcColorize(color, usage))))
+		}
+	}
 
 	if len(classes) == 0 {
 		emptyText := T("No classes are assigned to you yet.")
@@ -198,6 +217,11 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 		subtitle += "   ·   " + T("Owner: @1", cls.CreatedBy)
 	}
 	fsHeader(&b, 16, cls.Name, subtitle, true, true)
+	if canManage {
+		// Same place and color as "Return to HUB" in the students' world map.
+		b.WriteString(styledBtn(12.3, 0.2, 2.65, 0.6, "btn_return_hub", T("Return to HUB"), colorDanger))
+		b.WriteString(tooltip("btn_return_hub", T("Go back to the HUB, alone or with the students in the class worlds")))
+	}
 
 	// Left column: live controls and students.
 	b.WriteString(box(0.2, 1.3, 8.6, 8.1, colorCard))
@@ -276,6 +300,15 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 	// Right column: class worlds.
 	b.WriteString(box(9.0, 1.3, 6.8, 8.1, colorCard))
 	b.WriteString(sectionTitle(9.25, 1.6, T("CLASS WORLDS")))
+	maxWorlds := c.classWorldLimit(cls)
+	worldsFull := maxWorlds > 0 && len(instances) >= maxWorlds
+	if maxWorlds > 0 {
+		color := muted
+		if worldsFull {
+			color = warning
+		}
+		b.WriteString(fmt.Sprintf("label[12.2,1.6;%s]", fmtEsc(mcColorize(color, T("@1 of @2 worlds", len(instances), maxWorlds)))))
+	}
 	worlds := instances
 	if !canManage {
 		worlds = worlds[:0:0]
@@ -297,14 +330,15 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 		worldTop = 4.65
 	}
 	if canManage {
-		b.WriteString(styledBtn(9.25, worldTop-0.05, 6.3, 0.65, "btn_create_instance", T("+ New class world"), colorPrimary))
-		b.WriteString(tooltip("btn_create_instance", T("Create a new world from a map template for this class")))
+		if worldsFull && !c.isAdmin(cc.Name()) {
+			b.WriteString(disabledBtn(9.25, worldTop-0.05, 6.3, 0.65, T("World limit reached"), c.worldLimitMessage(classID)))
+		} else {
+			b.WriteString(styledBtn(9.25, worldTop-0.05, 6.3, 0.65, "btn_create_instance", T("+ New class world"), colorPrimary))
+			b.WriteString(tooltip("btn_create_instance", T("Create a new world from a map template for this class")))
+		}
 		worldTop += 0.8
 	}
 	worldBottom := 9.25
-	if canManage {
-		worldBottom = 8.4
-	}
 	if len(worlds) == 0 {
 		msg := T("No class worlds are running right now.")
 		if canManage {
@@ -349,11 +383,23 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 		iy += 1.55
 	}
 	b.WriteString("scroll_container_end[]")
-	if canManage {
-		b.WriteString(btn(9.25, 8.6, 6.3, 0.6, "btn_return_hub", T("Return to HUB")))
-	}
 
 	cc.ShowFormspec("classrooms:class", b.String())
+}
+
+// showReturnHubDialog asks whether the students in the class worlds come
+// back to the HUB with the teacher.
+func (c *controller) showReturnHubDialog(cc *proxy.ClientConn, classID int) {
+	n := len(c.studentsInClassWorlds(classID))
+	var b strings.Builder
+	dialogFrame(&b, 9, 5.6, accent, iconEnter, T("Return to HUB"))
+	b.WriteString(box(0.5, 1.6, 8, 1.5, colorCard))
+	b.WriteString(coloredLbl(0.85, 2.05, light, T("@1 students of this class are in its worlds.", n)))
+	b.WriteString(hint(0.85, 2.6, T("Do they come back to the HUB with you?")))
+	b.WriteString(styledBtn(0.5, 3.4, 3.9, 0.75, "btn_hub_with_students", T("Me and the students"), colorPrimary))
+	b.WriteString(btn(4.6, 3.4, 3.9, 0.75, "btn_hub_alone", T("Only me")))
+	b.WriteString(btn(3.0, 4.55, 3.0, 0.6, "btn_hub_cancel", T("Cancel")))
+	cc.ShowFormspec("classrooms:return_hub", b.String())
 }
 
 // onOff renders a boolean rule for the current-world summary.
@@ -769,22 +815,31 @@ func (c *controller) showAdminPanelTab(cc *proxy.ClientConn, activeTab string) {
 		return
 	}
 
-	if activeTab != "teachers" && activeTab != "classes" {
+	switch activeTab {
+	case "classes", "institutes", "users":
+	default:
 		activeTab = "instances"
 	}
 	c.setAdminTab(cc.Name(), activeTab)
 
 	var b strings.Builder
-	fsOpen(&b, 14, 8.6)
-	fsHeader(&b, 14, T("Global admin"), T("All worlds, classes and teachers"), false, true)
+	w, h := 14.0, 8.6
+	if activeTab == "users" {
+		w, h = usersPanelW, usersPanelH
+	}
+	fsOpen(&b, w, h)
+	fsHeader(&b, w, T("Global admin"), T("All worlds, classes, institutes and users"), false, true)
 	tabBar(&b, 0.3, 1.2, 2.4, "btn_admin_tab_"+activeTab, [][2]string{
 		{"btn_admin_tab_instances", T("Worlds")},
 		{"btn_admin_tab_classes", T("Classes")},
-		{"btn_admin_tab_teachers", T("Teachers")},
+		{"btn_admin_tab_institutes", T("Institutes")},
+		{"btn_admin_tab_users", T("Users")},
 	})
 
-	if activeTab == "teachers" {
-		c.writeAdminTeachersTab(&b)
+	if activeTab == "institutes" {
+		c.writeAdminInstitutesTab(cc, &b)
+	} else if activeTab == "users" {
+		c.writeAdminUsersTab(cc, &b)
 	} else if activeTab == "classes" {
 		c.writeAdminClassesTab(cc, &b)
 	} else {
@@ -803,25 +858,80 @@ func (c *controller) writeAdminInstancesTab(cc *proxy.ClientConn, b *strings.Bui
 		b.WriteString(hint(0.5, 3.35, T("No worlds match the current filters.")))
 		return
 	}
-	b.WriteString(adminScroll("scr_admin_inst", len(instances)))
+	visits := c.getLastWorldVisits()
+	classNames := make(map[int]string)
+	if classes, err := c.getAllClasses(); err == nil {
+		for _, cls := range classes {
+			classNames[cls.ID] = cls.Name
+		}
+	}
+
+	const rowH, rowStep = 1.15, 1.25
+	b.WriteString(scrollbarFor("scr_admin_inst", 13.45, 3.0, 5.25, len(instances), rowStep, 0.05))
 	b.WriteString("scroll_container[0.2,3.0;13.15,5.25;scr_admin_inst;vertical;0.1]")
 	iy := 0.05
 	for _, inst := range instances {
-		b.WriteString(box(0, iy, 13.0, 0.85, colorCard))
-		b.WriteString(statusDot(0.2, iy+0.18, instanceStatusColor(inst.Status)))
-		b.WriteString(fmt.Sprintf("label[0.6,%g;%s]", iy+0.28, fmtEsc(mcColorize(light, inst.Title()))))
-		detail := inst.CreatedBy + " · " + instanceStatusLabel(inst.Status)
+		b.WriteString(box(0, iy, 13.0, rowH, colorCard))
+		b.WriteString(statusDot(0.2, iy+0.16, instanceStatusColor(inst.Status)))
+		b.WriteString(fmt.Sprintf("label[0.6,%g;%s]", iy+0.26, fmtEsc(mcColorize(light, inst.Title()))))
+
+		where := []string{inst.CreatedBy, instanceStatusLabel(inst.Status)}
 		if inst.Institute != "" {
-			detail = inst.Institute + " · " + detail
+			where = append([]string{inst.Institute}, where...)
 		}
-		if inst.DisplayName != "" {
-			detail = detail + " · " + inst.ID
+		if inst.ClassID != nil {
+			if name, ok := classNames[*inst.ClassID]; ok {
+				where = append(where, T("class @1", name))
+			}
+		} else {
+			where = append(where, T("no class"))
 		}
-		b.WriteString(fmt.Sprintf("label[0.6,%g;%s]", iy+0.6, fmtEsc(mcColorize(muted, detail))))
-		b.WriteString(iconBtn(12.2, iy+0.13, 0.6, "open_inst_"+inst.ID, iconGear, T("Manage world")))
-		iy += 0.95
+		b.WriteString(fmt.Sprintf("label[0.6,%g;%s]", iy+0.58, fmtEsc(mcColorize(muted, strings.Join(where, " · ")))))
+
+		when := T("Created @1", fmtTime(inst.CreatedAt))
+		if v, ok := visits[inst.ID]; ok {
+			when += " · " + T("last teacher visit @1 (@2)", fmtTime(v.VisitedAt), v.Username)
+		} else {
+			when += " · " + T("no teacher visit recorded")
+		}
+		b.WriteString(fmt.Sprintf("label[0.6,%g;%s]", iy+0.9, fmtEsc(mcColorize(muted, when))))
+
+		b.WriteString(iconBtn(9.6, iy+0.28, 0.6, "info_inst_"+inst.ID, iconPeople, T("Teacher visits")))
+		b.WriteString(iconBtn(10.4, iy+0.28, 0.6, "hop_inst_"+inst.ID, iconEnter, T("Enter the world")))
+		b.WriteString(iconBtn(11.2, iy+0.28, 0.6, "open_inst_"+inst.ID, iconGear, T("Manage world")))
+		delName := "del_inst_" + inst.ID
+		if c.isDeleteArmed(cc.Name(), "instance:"+inst.ID) {
+			b.WriteString(styledBtn(11.95, iy+0.28, 0.95, 0.6, delName, T("Sure?"), colorDanger))
+		} else {
+			b.WriteString(iconBtn(12.2, iy+0.28, 0.6, delName, iconClose, T("Delete world")))
+		}
+		iy += rowStep
 	}
 	b.WriteString("scroll_container_end[]")
+}
+
+// showAdminWorldVisits lists the latest teacher visits to one world.
+func (c *controller) showAdminWorldVisits(cc *proxy.ClientConn, inst *instanceData) {
+	visits := c.getWorldVisits(inst.ID, visitsKept)
+
+	var b strings.Builder
+	dialogFrame(&b, 9, 8.2, accent, iconPeople, inst.Title())
+	b.WriteString(box(0.5, 1.5, 8, 5.65, colorCard))
+	b.WriteString(sectionTitle(0.8, 1.8, T("TEACHER VISITS")))
+	b.WriteString(hint(0.8, 2.2, T("Created @1 by @2", fmtTime(inst.CreatedAt), inst.CreatedBy)))
+	if len(visits) == 0 {
+		b.WriteString(hint(0.8, 2.8, T("No teacher visit recorded yet.")))
+	}
+	b.WriteString(scrollbarFor("scr_world_visits", 8.15, 2.5, 4.5, len(visits), 0.45, 0.05))
+	b.WriteString("scroll_container[0.8,2.5;7.3,4.5;scr_world_visits;vertical;0.1]")
+	for i, v := range visits {
+		y := 0.05 + float64(i)*0.45
+		b.WriteString(fmt.Sprintf("label[0,%g;%s]", y+0.2, fmtEsc(mcColorize(light, fmtTime(v.VisitedAt)))))
+		b.WriteString(fmt.Sprintf("label[2.6,%g;%s]", y+0.2, fmtEsc(v.Username)))
+	}
+	b.WriteString("scroll_container_end[]")
+	b.WriteString(btn(3.0, 7.35, 3.0, 0.65, "btn_back", T("Back")))
+	cc.ShowFormspec("classrooms:admin_world", b.String())
 }
 
 func (c *controller) writeAdminClassesTab(cc *proxy.ClientConn, b *strings.Builder) {
@@ -842,8 +952,11 @@ func (c *controller) writeAdminClassesTab(cc *proxy.ClientConn, b *strings.Build
 		instances, _ := c.getInstancesForClass(cls.ID)
 		b.WriteString(box(0, y, 13.0, 0.85, colorCard))
 		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", y+0.28, fmtEsc(mcColorize(light, cls.Name))))
-		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", y+0.6, fmtEsc(mcColorize(muted,
-			T("Owner: @1 · @2 students · @3 worlds", cls.CreatedBy, len(students), len(instances))))))
+		detail := T("Owner: @1 · @2 students · @3 worlds", cls.CreatedBy, len(students), len(instances))
+		if institute, _ := c.getTeacherInstitute(cls.CreatedBy); institute != "" {
+			detail = institute + " · " + detail
+		}
+		b.WriteString(fmt.Sprintf("label[0.2,%g;%s]", y+0.6, fmtEsc(mcColorize(muted, detail))))
 		b.WriteString(styledBtn(10.35, y+0.13, 1.6, 0.6, fmt.Sprintf("open_class_%d", cls.ID), T("Open"), colorPrimary))
 		delName := fmt.Sprintf("del_class_%d", cls.ID)
 		if c.isDeleteArmed(cc.Name(), fmt.Sprintf("class:%d", cls.ID)) {
@@ -886,47 +999,121 @@ func scrollbarAt(name string, x, y, h float64, itemCount int, rowStep, topPad fl
 	return fmt.Sprintf("scrollbaroptions[min=0;max=%d;smallstep=4;largestep=16;arrows=default]scrollbar[%g,%g;0.25,%g;vertical;%s;%d]", max, x, y, h, name, value)
 }
 
+// adminFilterValues are the choices of the admin institute and teacher
+// filters, in dropdown order: "" is "All", then noInstituteFilter for
+// institutes, then names.
+func (c *controller) adminFilterValues() (institutes, teachers []string) {
+	institutes = []string{"", noInstituteFilter}
+	if list, err := c.listInstitutes(); err == nil {
+		for _, in := range list {
+			institutes = append(institutes, in.Name)
+		}
+	}
+	teachers = []string{""}
+	names, _ := c.queryStrings(`SELECT username FROM teachers
+		UNION SELECT created_by FROM classes
+		UNION SELECT created_by FROM instances WHERE status != 'deleted' ORDER BY 1`)
+	return institutes, append(teachers, names...)
+}
+
+func indexOfString(values []string, v string) int {
+	for i, x := range values {
+		if x == v {
+			return i + 1
+		}
+	}
+	return 1
+}
+
+// writeAdminFilters draws the institute and teacher dropdowns of the Worlds
+// and Classes tabs. They apply as soon as a choice is made.
 func (c *controller) writeAdminFilters(b *strings.Builder, institute, teacher string) {
+	institutes, teachers := c.adminFilterValues()
+	instItems := append([]string{T("All institutes"), T("No institute")}, institutes[2:]...)
+	teacherItems := append([]string{T("All teachers")}, teachers[1:]...)
+
 	b.WriteString(box(0.2, 2.05, 13.55, 0.8, colorCard))
 	b.WriteString(fmt.Sprintf("image[0.4,2.22;0.45,0.45;%s]", iconSearch))
 	b.WriteString(hint(1.0, 2.45, T("Institute")))
-	b.WriteString("field[2.1,2.2;3.1,0.5;admin_filter_institute;;")
-	b.WriteString(fmtEsc(institute))
-	b.WriteString("]")
-	b.WriteString(hint(5.45, 2.45, T("Teacher")))
-	b.WriteString("field[6.4,2.2;3.1,0.5;admin_filter_teacher;;")
-	b.WriteString(fmtEsc(teacher))
-	b.WriteString("]")
-	b.WriteString(styledBtn(9.8, 2.2, 1.6, 0.5, "btn_admin_filter_apply", T("Filter"), colorPrimary))
-	b.WriteString(btn(11.55, 2.2, 1.6, 0.5, "btn_admin_filter_clear", T("Clear")))
+	b.WriteString(dropdownOf(2.1, 2.2, 3.4, 0.5, "admin_filter_institute", instItems, indexOfString(institutes, institute)))
+	b.WriteString(hint(5.75, 2.45, T("Teacher")))
+	b.WriteString(dropdownOf(6.9, 2.2, 3.4, 0.5, "admin_filter_teacher", teacherItems, indexOfString(teachers, teacher)))
+	b.WriteString(btn(10.6, 2.2, 2.4, 0.5, "btn_admin_filter_clear", T("Clear filters")))
 }
 
-func (c *controller) writeAdminTeachersTab(b *strings.Builder) {
-	teachers, _ := c.listTeacherRecords()
+func (c *controller) writeAdminInstitutesTab(cc *proxy.ClientConn, b *strings.Builder) {
+	institutes, _ := c.listInstitutes()
 
 	b.WriteString(box(0.2, 2.05, 13.55, 0.8, colorCard))
 	b.WriteString(fmt.Sprintf("image[0.4,2.22;0.45,0.45;%s]", iconPlus))
-	b.WriteString(hint(1.0, 2.45, T("Username")))
-	b.WriteString("field[2.2,2.2;3.1,0.5;new_teacher_name;;]")
-	b.WriteString(hint(5.45, 2.45, T("Institute")))
-	b.WriteString("field[6.4,2.2;3.1,0.5;new_teacher_institute;;]")
-	b.WriteString(styledBtn(9.8, 2.2, 1.6, 0.5, "btn_admin_add_teacher", T("Add"), colorPrimary))
+	b.WriteString("field[1.0,2.2;4.3,0.5;new_institute_name;;]")
+	b.WriteString(tooltip("new_institute_name", T("Institute name")))
+	b.WriteString("field[6.8,2.2;0.9,0.5;new_institute_max_classes;;0]")
+	b.WriteString(tooltip("new_institute_max_classes", T("Maximum classes of the institute; 0 means no limit.")))
+	b.WriteString("field[8.8,2.2;0.9,0.5;new_institute_max_worlds;;0]")
+	b.WriteString(tooltip("new_institute_max_worlds", T("Maximum worlds per class; 0 means no limit.")))
+	b.WriteString(styledBtn(10.2, 2.2, 1.6, 0.5, "btn_admin_add_institute", T("Add"), colorPrimary))
 
-	b.WriteString(adminScroll("scr_admin_teachers", len(teachers)))
-	b.WriteString("scroll_container[0.2,3.0;13.15,5.25;scr_admin_teachers;vertical;0.1]")
-	ty := 0.05
-	for _, t := range teachers {
-		fieldName := "teacher_institute_" + t.Username
-		b.WriteString(box(0, ty, 13.0, 0.85, colorCard))
-		b.WriteString(fmt.Sprintf("image[0.2,%g;0.45,0.45;%s]", ty+0.2, iconPlayer))
-		b.WriteString(fmt.Sprintf("label[0.8,%g;%s]", ty+0.42, fmtEsc(t.Username)))
-		b.WriteString(fmt.Sprintf("field[4.1,%g;5.0,0.5;%s;;%s]", ty+0.17, fmtEsc(fieldName), fmtEsc(t.Institute)))
-		b.WriteString(tooltip(fieldName, T("Institute")))
-		b.WriteString(btn(9.35, ty+0.14, 1.4, 0.58, "save_teacher_"+t.Username, T("Save")))
-		b.WriteString(iconBtn(12.2, ty+0.13, 0.6, "rm_teacher_"+t.Username, iconClose, T("Remove teacher role")))
-		ty += 0.95
+	// Column titles, aligned with the fields of the rows below.
+	b.WriteString(hint(0.4, 3.15, T("Institute")))
+	b.WriteString(hint(3.8, 3.15, T("Usage")))
+	b.WriteString(hint(6.8, 3.15, T("Max classes")))
+	b.WriteString(hint(8.8, 3.15, T("Worlds per class")))
+	b.WriteString(hint(11.95, 2.45, T("0 = no limit")))
+	if len(institutes) == 0 {
+		b.WriteString(hint(0.5, 3.8, T("No institutes yet: add one above.")))
+		return
+	}
+
+	b.WriteString(scrollbarFor("scr_admin_institutes", 13.45, 3.4, 4.85, len(institutes), 0.95, 0.05))
+	b.WriteString("scroll_container[0.2,3.4;13.15,4.85;scr_admin_institutes;vertical;0.1]")
+	y := 0.05
+	for _, in := range institutes {
+		id := fmt.Sprint(in.ID)
+		b.WriteString(box(0, y, 13.0, 0.85, colorCard))
+		b.WriteString(fmt.Sprintf("field[0.2,%g;3.2,0.5;institute_name_%s;;%s]", y+0.17, id, fmtEsc(in.Name)))
+		usage := T("@1 teachers · @2 classes", in.Teachers, in.Classes)
+		if in.MaxClasses > 0 {
+			usage = T("@1 teachers · @2/@3 classes", in.Teachers, in.Classes, in.MaxClasses)
+		}
+		b.WriteString(fmt.Sprintf("label[3.6,%g;%s]", y+0.42, fmtEsc(mcColorize(muted, usage))))
+		b.WriteString(fmt.Sprintf("field[6.6,%g;0.9,0.5;institute_max_classes_%s;;%d]", y+0.17, id, in.MaxClasses))
+		b.WriteString(fmt.Sprintf("field[8.6,%g;0.9,0.5;institute_max_worlds_%s;;%d]", y+0.17, id, in.MaxWorldsPerClass))
+		b.WriteString(btn(10.0, y+0.14, 1.4, 0.58, "save_institute_"+id, T("Save")))
+		delName := "del_institute_" + id
+		if c.isDeleteArmed(cc.Name(), "institute:"+id) {
+			b.WriteString(styledBtn(11.95, y+0.13, 0.95, 0.6, delName, T("Sure?"), colorDanger))
+			b.WriteString(tooltip(delName, T("Also deletes its classes and their worlds; its teachers become normal users.")))
+		} else {
+			b.WriteString(iconBtn(12.2, y+0.13, 0.6, delName, iconClose,
+				T("Delete the institute, its classes and their worlds")))
+		}
+		y += 0.95
 	}
 	b.WriteString("scroll_container_end[]")
+}
+
+// ── Password dialog ─────────────────────────────────────────────────────────
+
+func (c *controller) showPasswordDialog(cc *proxy.ClientConn) {
+	target, ok := c.getPasswordTarget(cc.Name())
+	if !ok || !c.canChangePassword(cc.Name(), target.Name) {
+		c.closePasswordDialog(cc)
+		return
+	}
+
+	var b strings.Builder
+	dialogFrame(&b, 9, 6.4, accent, iconLock, T("Change password"))
+	b.WriteString(box(0.5, 1.6, 8, 3.55, colorCard))
+	b.WriteString(coloredLbl(0.85, 2.0, light, T("Account: @1", target.Name)))
+	b.WriteString(hint(0.85, 2.45, T("The new password applies from the next login.")))
+	b.WriteString("pwdfield[0.85,3.15;3.6,0.65;new_password;" + fmtEsc(T("New password (8+ chars)")) + "]")
+	b.WriteString("pwdfield[4.55,3.15;3.6,0.65;new_password_confirm;" + fmtEsc(T("Repeat password")) + "]")
+	b.WriteString("field_close_on_enter[new_password;false]")
+	b.WriteString("field_close_on_enter[new_password_confirm;false]")
+	b.WriteString(styledBtn(0.85, 5.45, 3.6, 0.7, "btn_password_save", T("Change password"), colorPrimary))
+	b.WriteString(btn(4.55, 5.45, 3.6, 0.7, "btn_password_cancel", T("Cancel")))
+	cc.ShowFormspec("classrooms:password", b.String())
 }
 
 // ── People editor: Students | Assistance | Teachers ─────────────────────────
@@ -990,6 +1177,8 @@ func (c *controller) showStudentEditor(cc *proxy.ClientConn, classID int) {
 	groups, _ := c.getGroups(classID)
 	byStudent := groupByStudent(groups)
 	view := c.studentList(cc.Name(), classID)
+	isAdmin := c.isAdmin(cc.Name())
+	created := c.getAccountCreators(cc.Name())
 
 	var b strings.Builder
 	c.peopleFrameSize(&b, cc, cls, peopleTabStudents, peopleWideW, peopleWideH)
@@ -1078,12 +1267,15 @@ func (c *controller) showStudentEditor(cc *proxy.ClientConn, classID int) {
 		if g, ok := byStudent[s]; ok {
 			b.WriteString(box(5.2, ry+0.23, 0.22, 0.22, g.Color))
 			name := []rune(g.Name)
-			if len(name) > 16 {
-				name = append(name[:15], '…')
+			if len(name) > 13 {
+				name = append(name[:12], '…')
 			}
 			b.WriteString(fmt.Sprintf("label[5.55,%g;%s]", ry+0.34, fmtEsc(mcColorize(g.Color, string(name)))))
 		} else if len(groups) > 0 {
 			b.WriteString(fmt.Sprintf("label[5.55,%g;%s]", ry+0.34, fmtEsc(mcColorize(muted, T("no group")))))
+		}
+		if _, mine := created[s]; isAdmin || (mine && c.canChangePassword(cc.Name(), s)) {
+			b.WriteString(iconBtn(7.7, ry+0.09, 0.5, "pw_student_"+s, iconLock, T("Change password: @1", s)))
 		}
 		b.WriteString(iconBtn(8.3, ry+0.09, 0.5, "rm_student_"+s, iconClose, T("Remove from class: @1", s)))
 		ry += rowStep

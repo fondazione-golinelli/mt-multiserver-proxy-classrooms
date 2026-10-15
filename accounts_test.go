@@ -117,3 +117,55 @@ func TestAccountCreationRequiresClassManagement(t *testing.T) {
 		}
 	}
 }
+
+type testPasswordBackend struct {
+	proxy.AuthBackend
+	users          []proxy.User
+	err            error
+	salt, verifier []byte
+	calls          int
+}
+
+func (a *testPasswordBackend) Exists(name string) bool {
+	for _, u := range a.users {
+		if u.Name == name {
+			return true
+		}
+	}
+	return false
+}
+func (a *testPasswordBackend) SetPasswd(_ string, salt, verifier []byte) error {
+	a.calls++
+	a.salt, a.verifier = salt, verifier
+	return a.err
+}
+func (a *testPasswordBackend) Export() ([]proxy.User, error) { return a.users, nil }
+
+func TestSetAccountPassword(t *testing.T) {
+	backend := &testPasswordBackend{users: []proxy.User{{Name: "Student_1"}}}
+	if setAccountPassword(backend, "Student_1", "short", "short") == "" || backend.calls != 0 {
+		t.Fatal("accepted invalid password")
+	}
+	if setAccountPassword(backend, "Student_1", "password123", "different") == "" || backend.calls != 0 {
+		t.Fatal("accepted mismatched passwords")
+	}
+	if setAccountPassword(backend, "Nobody", "password123", "password123") == "" || backend.calls != 0 {
+		t.Fatal("created a missing account")
+	}
+	if msg := setAccountPassword(backend, "Student_1", "password123", "password123"); msg != "" || backend.calls != 1 {
+		t.Fatalf("password not changed: %s", msg)
+	}
+	A, a, _ := srp.InitiateHandshake()
+	B, _, serverKey, err := srp.Handshake(A, backend.verifier)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientKey, err := srp.CompleteHandshake(A, a, []byte("student_1"), []byte("password123"), backend.salt, B)
+	if err != nil || !bytes.Equal(serverKey, clientKey) {
+		t.Fatal("new password does not authenticate")
+	}
+	failing := &testPasswordBackend{users: backend.users, err: errors.New("disk full")}
+	if setAccountPassword(failing, "Student_1", "password123", "password123") == "" {
+		t.Fatal("ignored backend failure")
+	}
+}

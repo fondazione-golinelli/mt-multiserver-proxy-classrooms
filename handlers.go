@@ -28,6 +28,9 @@ func (c *controller) registerHandlers() {
 	proxy.RegisterOnPlayerReceiveFields("classrooms:groups", c.handleGroupsEditor)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:world_tools", c.handleWorldTools)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:mission", c.handleMissionEditor)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:password", c.handlePasswordDialog)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:admin_world", c.handleAdminWorldVisits)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:return_hub", c.handleReturnHubDialog)
 }
 
 func fieldMap(fields []mt.Field) map[string]string {
@@ -181,6 +184,56 @@ func (c *controller) hopClassToInstance(cc *proxy.ClientConn, inst *instanceData
 	}
 }
 
+// studentsInClassWorlds are the online students of a class who are on one of
+// its worlds.
+func (c *controller) studentsInClassWorlds(classID int) []string {
+	worlds, err := c.getInstancesForClass(classID)
+	if err != nil {
+		return nil
+	}
+	onWorld := make(map[string]bool, len(worlds))
+	for _, w := range worlds {
+		onWorld[w.ProxyName] = true
+	}
+	var result []string
+	for _, name := range c.getOnlineStudents(classID) {
+		if p := proxy.Find(name); p != nil && onWorld[p.ServerName()] {
+			result = append(result, name)
+		}
+	}
+	return result
+}
+
+func (c *controller) handleReturnHubDialog(cc *proxy.ClientConn, fields []mt.Field) {
+	classID, ok := c.getActiveClass(cc.Name())
+	if !ok || !c.canManageClass(classID, cc.Name()) {
+		return
+	}
+	fm := fieldMap(fields)
+	_, alone := fm["btn_hub_alone"]
+	_, withClass := fm["btn_hub_with_students"]
+	if !alone && !withClass {
+		if _, ok := fm["btn_hub_cancel"]; ok {
+			c.showClassViewWithOrigin(cc, classID, c.getActiveClassOrigin(cc.Name()))
+		}
+		return
+	}
+	if withClass {
+		moved := 0
+		for _, name := range c.studentsInClassWorlds(classID) {
+			if p := proxy.Find(name); p != nil && c.hopPlayer(p, c.cfg.LobbyServer) == nil {
+				moved++
+			}
+		}
+		c.notify(cc, T("@1 students sent back to the HUB.", moved))
+	}
+	if cc.ServerName() != c.cfg.LobbyServer {
+		if result := c.handleLobbyCmd(cc); result != "" {
+			c.notify(cc, result)
+		}
+	}
+}
+
 // ── Main Dashboard Handler ──────────────────────────────────────────────────
 
 func (c *controller) handleMainDashboard(cc *proxy.ClientConn, fields []mt.Field) {
@@ -223,9 +276,8 @@ func (c *controller) handleMainDashboard(cc *proxy.ClientConn, fields []mt.Field
 			idStr := strings.TrimPrefix(k, "del_class_")
 			id, _ := strconv.Atoi(idStr)
 			if c.armDelete(name, "class:"+idStr) {
-				if ok, msg := c.deleteClass(name, id); !ok {
-					c.notify(cc, msg)
-				}
+				_, msg := c.deleteClass(name, id)
+				c.notify(cc, msg)
 			}
 			c.showMainDashboard(cc)
 			return
@@ -337,10 +389,22 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 	}
 
 	if _, ok := fm["btn_create_instance"]; ok {
+		if !c.isAdmin(cc.Name()) {
+			if msg := c.worldLimitMessage(classID); msg != "" {
+				c.notify(cc, msg)
+				c.showClassViewWithOrigin(cc, classID, c.getActiveClassOrigin(cc.Name()))
+				return
+			}
+		}
 		c.showTemplatePicker(cc, &classID)
 		return
 	}
 	if _, ok := fm["btn_return_hub"]; ok {
+		// Ask only when there are students to bring back.
+		if len(c.studentsInClassWorlds(classID)) > 0 {
+			c.showReturnHubDialog(cc, classID)
+			return
+		}
 		if result := c.handleLobbyCmd(cc); result != "" {
 			c.notify(cc, result)
 		}
@@ -452,6 +516,13 @@ func (c *controller) handleTemplatePicker(cc *proxy.ClientConn, fields []mt.Fiel
 				return
 			}
 			player := cc.Name()
+			if hasClass && !c.isAdmin(player) {
+				if msg := c.worldLimitMessage(classID); msg != "" {
+					c.notify(cc, msg)
+					c.showTemplatePicker(cc, activeClassPtr(hasClass, classID))
+					return
+				}
+			}
 			if !c.beginOp(player) {
 				c.notify(cc, T("Another server operation is already running. Please wait for it to finish."))
 				return
@@ -941,7 +1012,8 @@ func (c *controller) handleAdminPanel(cc *proxy.ClientConn, fields []mt.Field) {
 		return
 	}
 	fm := fieldMap(fields)
-	if !hasPrefixKey(fm, "del_class_") {
+	if !hasPrefixKey(fm, "del_class_") && !hasPrefixKey(fm, "del_inst_") &&
+		!hasPrefixKey(fm, "del_institute_") && !hasPrefixKey(fm, "del_account_") {
 		c.disarmDelete(cc.Name())
 	}
 
@@ -962,16 +1034,28 @@ func (c *controller) handleAdminPanel(cc *proxy.ClientConn, fields []mt.Field) {
 		return
 	}
 
-	if _, ok := fm["btn_admin_tab_teachers"]; ok {
-		c.showAdminPanelTab(cc, "teachers")
+	if _, ok := fm["btn_admin_tab_institutes"]; ok {
+		c.showAdminPanelTab(cc, "institutes")
 		return
 	}
 
-	if _, ok := fm["btn_admin_filter_apply"]; ok {
-		institute := strings.TrimSpace(fm["admin_filter_institute"])
-		teacher := strings.TrimSpace(fm["admin_filter_teacher"])
-		c.setAdminFilters(cc.Name(), institute, teacher)
-		c.showAdminPanelTab(cc, c.getAdminTab(cc.Name()))
+	if _, ok := fm["btn_admin_add_institute"]; ok {
+		_, msg := c.createInstitute(fm["new_institute_name"], fm["new_institute_max_classes"], fm["new_institute_max_worlds"])
+		c.notify(cc, msg)
+		c.showAdminPanelTab(cc, "institutes")
+		return
+	}
+
+	if _, ok := fm["btn_admin_tab_users"]; ok {
+		c.showAdminPanelTab(cc, "users")
+		return
+	}
+
+	if c.handleAdminUsers(cc, fm) {
+		return
+	}
+
+	if c.applyAdminFilters(cc, fm) {
 		return
 	}
 
@@ -981,22 +1065,59 @@ func (c *controller) handleAdminPanel(cc *proxy.ClientConn, fields []mt.Field) {
 		return
 	}
 
-	if _, ok := fm["btn_admin_add_teacher"]; ok {
-		tName := strings.TrimSpace(fm["new_teacher_name"])
-		if tName != "" {
-			institute := strings.TrimSpace(fm["new_teacher_institute"])
-			if c.addTeacherWithInstitute(tName, institute) == nil && proxy.Find(tName) != nil {
-				c.scheduleReapplyStates(tName, 0)
-			}
-		}
-		c.showAdminPanelTab(cc, "teachers")
-		return
-	}
-
 	for k := range fm {
 		if strings.HasPrefix(k, "open_inst_") {
 			instID := strings.TrimPrefix(k, "open_inst_")
 			c.showInstanceViewWithOrigin(cc, instID, viewOriginAdminInstances)
+			return
+		}
+		if strings.HasPrefix(k, "info_inst_") {
+			if inst, _ := c.getInstanceByID(strings.TrimPrefix(k, "info_inst_")); inst != nil {
+				c.showAdminWorldVisits(cc, inst)
+			}
+			return
+		}
+		if strings.HasPrefix(k, "hop_inst_") {
+			inst, _ := c.getInstanceByID(strings.TrimPrefix(k, "hop_inst_"))
+			if inst == nil || inst.Status != "running" {
+				c.notify(cc, T("This world is not running: start it from Manage."))
+				c.showAdminPanelTab(cc, "instances")
+				return
+			}
+			if cc.ServerName() != inst.ProxyName {
+				if err := c.hopPlayer(cc, inst.ProxyName); err != nil {
+					c.notify(cc, T("Failed to enter the world: @1", err.Error()))
+				}
+			}
+			return
+		}
+		if strings.HasPrefix(k, "del_inst_") {
+			instID := strings.TrimPrefix(k, "del_inst_")
+			if c.armDelete(cc.Name(), "instance:"+instID) {
+				if inst, _ := c.getInstanceByID(instID); inst != nil {
+					c.notify(cc, T("Deleting instance..."))
+					c.deleteInstancesAsync([]instanceData{*inst})
+				}
+			}
+			c.showAdminPanelTab(cc, "instances")
+			return
+		}
+		if strings.HasPrefix(k, "save_institute_") {
+			id := strings.TrimPrefix(k, "save_institute_")
+			n, _ := strconv.Atoi(id)
+			_, msg := c.updateInstitute(n, fm["institute_name_"+id], fm["institute_max_classes_"+id], fm["institute_max_worlds_"+id])
+			c.notify(cc, msg)
+			c.showAdminPanelTab(cc, "institutes")
+			return
+		}
+		if strings.HasPrefix(k, "del_institute_") {
+			id := strings.TrimPrefix(k, "del_institute_")
+			if c.armDelete(cc.Name(), "institute:"+id) {
+				n, _ := strconv.Atoi(id)
+				_, msg := c.deleteInstitute(n)
+				c.notify(cc, msg)
+			}
+			c.showAdminPanelTab(cc, "institutes")
 			return
 		}
 		if strings.HasPrefix(k, "open_class_") {
@@ -1009,27 +1130,10 @@ func (c *controller) handleAdminPanel(cc *proxy.ClientConn, fields []mt.Field) {
 			idStr := strings.TrimPrefix(k, "del_class_")
 			id, _ := strconv.Atoi(idStr)
 			if c.armDelete(cc.Name(), "class:"+idStr) {
-				if ok, msg := c.deleteClass(cc.Name(), id); !ok {
-					c.notify(cc, msg)
-				}
+				_, msg := c.deleteClass(cc.Name(), id)
+				c.notify(cc, msg)
 			}
 			c.showAdminPanelTab(cc, "classes")
-			return
-		}
-		if strings.HasPrefix(k, "rm_teacher_") {
-			tName := strings.TrimPrefix(k, "rm_teacher_")
-			if c.removeTeacher(tName) == nil && proxy.Find(tName) != nil {
-				c.scheduleReapplyStates(tName, 0)
-			}
-			c.showAdminPanelTab(cc, "teachers")
-			return
-		}
-		if strings.HasPrefix(k, "save_teacher_") {
-			tName := strings.TrimPrefix(k, "save_teacher_")
-			fieldName := "teacher_institute_" + tName
-			institute := strings.TrimSpace(fm[fieldName])
-			c.updateTeacherInstitute(tName, institute)
-			c.showAdminPanelTab(cc, "teachers")
 			return
 		}
 	}
@@ -1097,6 +1201,11 @@ func (c *controller) handleStudentEditor(cc *proxy.ClientConn, fields []mt.Field
 	}
 
 	for k := range fm {
+		if strings.HasPrefix(k, "pw_student_") {
+			c.setPasswordTarget(cc.Name(), passwordTarget{Name: strings.TrimPrefix(k, "pw_student_"), ClassID: classID})
+			c.showPasswordDialog(cc)
+			return
+		}
 		if strings.HasPrefix(k, "rm_student_") {
 			sName := strings.TrimPrefix(k, "rm_student_")
 			c.removeStudent(classID, sName)
@@ -1177,4 +1286,77 @@ func (c *controller) handleClassMemberEditor(cc *proxy.ClientConn, fields []mt.F
 			return
 		}
 	}
+}
+
+// ── Password Dialog Handler ─────────────────────────────────────────────────
+
+func (c *controller) handlePasswordDialog(cc *proxy.ClientConn, fields []mt.Field) {
+	target, ok := c.getPasswordTarget(cc.Name())
+	if !ok {
+		return
+	}
+	fm := fieldMap(fields)
+	if _, ok := fm["btn_password_cancel"]; ok {
+		c.closePasswordDialog(cc)
+		return
+	}
+	_, save := fm["btn_password_save"]
+	if !save && fm["key_enter_field"] != "new_password_confirm" {
+		// Closed with Escape: forget the target.
+		if _, ok := fm["quit"]; ok {
+			c.clearPasswordTarget(cc.Name())
+		}
+		return
+	}
+	ok, msg := c.changeAccountPassword(cc.Name(), target.Name, fm["new_password"], fm["new_password_confirm"])
+	c.notify(cc, msg)
+	if !ok {
+		c.showPasswordDialog(cc)
+		return
+	}
+	c.closePasswordDialog(cc)
+}
+
+// closePasswordDialog returns to the screen the dialog was opened from.
+func (c *controller) closePasswordDialog(cc *proxy.ClientConn) {
+	target, _ := c.getPasswordTarget(cc.Name())
+	c.clearPasswordTarget(cc.Name())
+	if target.ClassID != 0 {
+		c.showStudentEditor(cc, target.ClassID)
+		return
+	}
+	c.showAdminPanelTab(cc, "users")
+}
+
+func (c *controller) handleAdminWorldVisits(cc *proxy.ClientConn, fields []mt.Field) {
+	if !c.isAdmin(cc.Name()) {
+		return
+	}
+	if _, ok := fieldMap(fields)["btn_back"]; ok {
+		c.showAdminPanelTab(cc, "instances")
+	}
+}
+
+// applyAdminFilters reacts to the institute and teacher dropdowns of the
+// Worlds and Classes tabs, which submit the form when changed.
+func (c *controller) applyAdminFilters(cc *proxy.ClientConn, fm map[string]string) bool {
+	tab := c.getAdminTab(cc.Name())
+	if tab != "instances" && tab != "classes" {
+		return false
+	}
+	institutes, teachers := c.adminFilterValues()
+	institute, teacher := c.getAdminFilters(cc.Name())
+	newInstitute, newTeacher := institute, teacher
+	if idx, ok := scrollValue(fm["admin_filter_institute"]); ok && idx >= 1 && idx <= len(institutes) {
+		newInstitute = institutes[idx-1]
+	}
+	if idx, ok := scrollValue(fm["admin_filter_teacher"]); ok && idx >= 1 && idx <= len(teachers) {
+		newTeacher = teachers[idx-1]
+	}
+	if newInstitute == institute && newTeacher == teacher {
+		return false
+	}
+	c.setAdminFilters(cc.Name(), newInstitute, newTeacher)
+	c.showAdminPanelTab(cc, tab)
+	return true
 }

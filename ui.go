@@ -125,6 +125,17 @@ func styledBtn(x, y, w, h float64, name, label, color string) string {
 	return fmt.Sprintf("style[%s;bgcolor=%s]", fmtEsc(name), color) + btn(x, y, w, h, fmtEsc(name), label)
 }
 
+// disabledBtn looks like a greyed-out button but cannot be clicked: formspecs
+// have no disabled state. The tooltip explains why.
+func disabledBtn(x, y, w, h float64, label, tip string) string {
+	s := box(x, y, w, h, colorTabIdle)
+	s += coloredLbl(x+0.25, y+h/2, muted, label)
+	if tip != "" {
+		s += fmt.Sprintf("tooltip[%g,%g;%g,%g;%s]", x, y, w, h, fmtEsc(tip))
+	}
+	return s
+}
+
 // actionTile is a big icon button with a caption underneath. active
 // highlights toggles that are currently on.
 func actionTile(b *strings.Builder, x, y, w float64, name, icon, caption, tooltip string, active bool) {
