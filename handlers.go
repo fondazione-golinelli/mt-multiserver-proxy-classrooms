@@ -31,6 +31,7 @@ func (c *controller) registerHandlers() {
 	proxy.RegisterOnPlayerReceiveFields("classrooms:password", c.handlePasswordDialog)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:admin_world", c.handleAdminWorldVisits)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:return_hub", c.handleReturnHubDialog)
+	proxy.RegisterOnPlayerReceiveFields(minigamesForm, c.handleMinigames)
 }
 
 func fieldMap(fields []mt.Field) map[string]string {
@@ -397,6 +398,10 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 			}
 		}
 		c.showTemplatePicker(cc, &classID)
+		return
+	}
+	if _, ok := fm["btn_minigames"]; ok && canManage {
+		c.openMinigames(cc, classID)
 		return
 	}
 	if _, ok := fm["btn_return_hub"]; ok {

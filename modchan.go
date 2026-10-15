@@ -67,6 +67,10 @@ func (c *controller) handleBridgeMessage(cc *proxy.ClientConn, sender, msg strin
 		}
 		return
 	}
+	if action == "minigame_list" || action == "minigame_result" {
+		c.handleMinigameReply(cc, sender, data)
+		return
+	}
 	if action == "mission_progress" {
 		c.handleMissionProgress(data)
 		return

@@ -40,6 +40,7 @@ mt-multiserver-proxy (lobby = default server)
 | [formspec.go](formspec.go) | Builders for `classrooms:main`, `classrooms:class`, `classrooms:template_picker`, `classrooms:instance`, `classrooms:admin`, `classrooms:students` |
 | [handlers.go](handlers.go) | `RegisterOnPlayerReceiveFields` handlers for each formspec |
 | [modchan.go](modchan.go) | `classrooms:cmd` channel registration, `ensureChannelJoin`, join/leave hooks, `reapplyStates` after hop |
+| [minigames.go](minigames.go) | Class view → **Minigames** (`classrooms:minigames`): lists the HUB's `skyss_minigames` arenas and starts/stops matches for the class or a group through the bridge (`minigame_list/start/stop`, matched by `request_id`) |
 
 ## Capabilities
 

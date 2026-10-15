@@ -221,6 +221,8 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 		// Same place and color as "Return to HUB" in the students' world map.
 		b.WriteString(styledBtn(12.3, 0.2, 2.65, 0.6, "btn_return_hub", T("Return to HUB"), colorDanger))
 		b.WriteString(tooltip("btn_return_hub", T("Go back to the HUB, alone or with the students in the class worlds")))
+		b.WriteString(styledBtn(9.5, 0.2, 2.65, 0.6, "btn_minigames", T("Minigames"), colorPrimary))
+		b.WriteString(tooltip("btn_minigames", T("Start a HUB minigame for the class or one of its groups")))
 	}
 
 	// Left column: live controls and students.
