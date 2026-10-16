@@ -145,7 +145,7 @@ func (c *controller) showPortalWorlds(cc *proxy.ClientConn) {
 		if len(teacher) > 14 {
 			teacher = append(teacher[:13], '…')
 		}
-		details := T("Map: @1  ·  Teacher: @2  ·  @3 players inside", inst.TemplateName, string(teacher), players)
+		details := T("Map: @1  ·  Teacher: @2  ·  @3 players inside", c.templateLabel(inst.TemplateName), string(teacher), players)
 		b.WriteString(fmt.Sprintf("label[0.7,%g;%s]", y+0.7, fmtEsc(mcColorize(muted, details))))
 		field := "visit_inst_" + inst.ID
 		switch role {

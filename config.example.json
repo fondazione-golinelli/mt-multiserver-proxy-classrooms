@@ -15,6 +15,7 @@
       "egg_id": 1,
       "mount_id": 1,
       "template_name": "test",
+      "display_name": "Test World",
       "instance_template_mount": "/home/mount",
       "media_pool": "lobby",
       "location_ids": [1],

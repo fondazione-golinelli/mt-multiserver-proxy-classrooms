@@ -54,7 +54,7 @@ func (c *controller) showWorldControls(cc *proxy.ClientConn, instanceID string) 
 	stopped := c.isInstanceTimeStopped(instanceID)
 
 	var b strings.Builder
-	instanceFrame(&b, inst, instTabWorld)
+	c.instanceFrame(&b, inst, instTabWorld)
 
 	if cc.ServerName() != inst.ProxyName {
 		b.WriteString(box(0.3, 2.15, 10.4, 3.0, colorCard))

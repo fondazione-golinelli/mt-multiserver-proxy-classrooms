@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	proxy "github.com/HimbeerserverDE/mt-multiserver-proxy"
 )
@@ -82,6 +83,8 @@ type instanceConfig struct {
 
 type templateConfig struct {
 	TemplateName      string   `json:"template_name"`
+	DisplayName       string   `json:"display_name"` // English, translated through T()
+	Icon              string   `json:"icon"`         // picker icon in icons/, default the key
 	WorldName         string   `json:"world_name"`
 	AdminName         string   `json:"admin_name"`
 	NamePrefix        string   `json:"name_prefix"`
@@ -97,6 +100,9 @@ type templateConfig struct {
 
 	// Visibility
 	Public bool `json:"public"`
+	// Retired: no new worlds, not listed even for admins; existing worlds
+	// keep working (removing the entry would stop registering them).
+	Retired bool `json:"retired"`
 }
 
 type resourceLimits struct {
@@ -357,11 +363,18 @@ func loadConfig() (classroomsConfig, error) {
 	if len(cfg.Templates) == 0 {
 		return classroomsConfig{}, errors.New("at least one template must be configured")
 	}
+	// An invalid template is left out, so one bad entry does not disable the
+	// plugin.
 	for key, tpl := range cfg.Templates {
 		if err := validateTemplate(key, &tpl); err != nil {
-			return classroomsConfig{}, err
+			log.Printf("[%s] template skipped: %v", pluginName, err)
+			delete(cfg.Templates, key)
+			continue
 		}
 		cfg.Templates[key] = tpl
+	}
+	if len(cfg.Templates) == 0 {
+		return classroomsConfig{}, errors.New("no valid template configured")
 	}
 
 	log.Printf("[%s] config loaded from %s", pluginName, path)
@@ -426,6 +439,26 @@ func validateTemplate(name string, tpl *templateConfig) error {
 	}
 	if tpl.ServerMaxUsers == "" {
 		tpl.ServerMaxUsers = "15"
+	}
+	// Limits of the Luanti egg variables these fields are sent as; Pelican
+	// rejects a longer value with 422 when a teacher creates a world.
+	// SERVER_NAME is "<name_prefix>-<player>-<timestamp>-<suffix>", at most
+	// 44 characters plus the prefix, and is limited to 64.
+	for _, f := range []struct {
+		field, value string
+		max          int
+	}{
+		{"template_name", tpl.TemplateName, 128},
+		{"world_name", tpl.WorldName, 32},
+		{"admin_name", tpl.AdminName, 32},
+		{"name_prefix", tpl.NamePrefix, 20},
+		{"server_description", tpl.ServerDescription, 64},
+		{"server_motd", tpl.ServerMOTD, 128},
+		{"server_password", tpl.ServerPassword, 64},
+	} {
+		if n := utf8.RuneCountInString(f.value); n > f.max {
+			return fmt.Errorf("template %q: %s is %d characters, at most %d", name, f.field, n, f.max)
+		}
 	}
 	return nil
 }

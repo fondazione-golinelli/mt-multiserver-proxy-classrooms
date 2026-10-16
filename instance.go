@@ -18,6 +18,9 @@ func (c *controller) provisionInstance(classID *int, createdBy, templateName, di
 	if !ok {
 		return nil, fmt.Errorf("template %q not found", templateName)
 	}
+	if tpl.Retired {
+		return nil, fmt.Errorf("template %q is retired", templateName)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.cfg.PollTimeoutSeconds)*time.Second)
 	defer cancel()

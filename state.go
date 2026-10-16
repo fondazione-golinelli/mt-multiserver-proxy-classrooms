@@ -1201,7 +1201,7 @@ func (c *controller) isRestartPending(instanceID string) bool {
 func (c *controller) getPublicTemplates() []string {
 	var result []string
 	for key, tpl := range c.cfg.Templates {
-		if tpl.Public {
+		if tpl.Public && !tpl.Retired {
 			result = append(result, key)
 		}
 	}
@@ -1209,11 +1209,22 @@ func (c *controller) getPublicTemplates() []string {
 	return result
 }
 
-// getAllTemplates returns all template keys (for admins).
+// templateLabel is the player-facing name of a template: its display_name
+// (translated by the client) or else the template key.
+func (c *controller) templateLabel(key string) string {
+	if tpl, ok := c.cfg.Templates[key]; ok && tpl.DisplayName != "" {
+		return T(tpl.DisplayName)
+	}
+	return key
+}
+
+// getAllTemplates returns all template keys but retired ones (for admins).
 func (c *controller) getAllTemplates() []string {
 	var result []string
-	for key := range c.cfg.Templates {
-		result = append(result, key)
+	for key, tpl := range c.cfg.Templates {
+		if !tpl.Retired {
+			result = append(result, key)
+		}
 	}
 	sort.Strings(result)
 	return result

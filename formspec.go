@@ -362,7 +362,7 @@ func (c *controller) showClassViewWithOrigin(cc *proxy.ClientConn, classID int, 
 		b.WriteString(fmt.Sprintf("label[0.6,%g;%s]", iy+0.31, fmtEsc(mcColorize(light, inst.Title()))))
 		b.WriteString(fmt.Sprintf("label[0.6,%g;%s]", iy+0.66, fmtEsc(
 			mcColorize(instanceStatusColor(inst.Status), instanceStatusLabel(inst.Status))+
-				mcColorize(muted, "  ·  "+inst.TemplateName))))
+				mcColorize(muted, "  ·  "+c.templateLabel(inst.TemplateName)))))
 		bx := 0.2
 		if inst.Status == "running" {
 			here := cc.ServerName() == inst.ProxyName
@@ -485,9 +485,9 @@ func (c *controller) showTemplatePicker(cc *proxy.ClientConn, classID *int) {
 	for _, tName := range templates {
 		tpl := c.cfg.Templates[tName]
 		b.WriteString(box(0, y, 10.0, 0.95, colorCard))
-		b.WriteString(fmt.Sprintf("image[0.2,%g;0.55,0.55;%s]", y+0.2, iconGlobe))
-		b.WriteString(fmt.Sprintf("label[0.95,%g;%s]", y+0.3, fmtEsc(mcColorize(light, tName))))
-		b.WriteString(fmt.Sprintf("label[0.95,%g;%s]", y+0.66, fmtEsc(mcColorize(muted, tpl.ServerDescription))))
+		b.WriteString(fmt.Sprintf("image[0.15,%g;0.75,0.75;%s]", y+0.1, c.templateIcon(tName)))
+		b.WriteString(fmt.Sprintf("label[1.1,%g;%s]", y+0.3, fmtEsc(mcColorize(light, c.templateLabel(tName)))))
+		b.WriteString(fmt.Sprintf("label[1.1,%g;%s]", y+0.66, fmtEsc(mcColorize(muted, T(tpl.ServerDescription)))))
 		b.WriteString(styledBtn(8.0, y+0.17, 1.8, 0.6, "pick_tpl_"+tName, T("Create"), colorPrimary))
 		y += 1.05
 	}
@@ -538,7 +538,7 @@ func (c *controller) showInstanceReady(cc *proxy.ClientConn, inst *instanceData,
 	dialogFrame(&b, 10, 6.6, success, iconCheck, title)
 	b.WriteString(box(0.5, 1.6, 9, 1.8, colorCard))
 	b.WriteString(coloredLbl(0.85, 2.1, light, inst.Title()))
-	b.WriteString(hint(0.85, 2.7, T("Map: @1   ·   The world is online. What next?", inst.TemplateName)))
+	b.WriteString(hint(0.85, 2.7, T("Map: @1   ·   The world is online. What next?", c.templateLabel(inst.TemplateName))))
 
 	tileW := 2.7
 	x := 0.5
@@ -582,9 +582,9 @@ const (
 )
 
 // instanceFrame draws the shared header and tab bar of the world screens.
-func instanceFrame(b *strings.Builder, inst *instanceData, activeTab string) {
+func (c *controller) instanceFrame(b *strings.Builder, inst *instanceData, activeTab string) {
 	fsOpen(b, 11, 9.6)
-	subtitle := instanceStatusLabel(inst.Status) + "   ·   " + inst.TemplateName
+	subtitle := instanceStatusLabel(inst.Status) + "   ·   " + c.templateLabel(inst.TemplateName)
 	fsHeader(b, 11, inst.Title(), subtitle, true, true)
 	tabBar(b, 0.3, 1.3, 3.4, activeTab, [][2]string{
 		{instTabOverview, T("Overview")},
@@ -609,7 +609,7 @@ func (c *controller) showInstanceViewWithOrigin(cc *proxy.ClientConn, instanceID
 	c.setActiveInstanceWithOrigin(cc.Name(), instanceID, origin)
 
 	var b strings.Builder
-	instanceFrame(&b, inst, instTabOverview)
+	c.instanceFrame(&b, inst, instTabOverview)
 
 	// Main actions.
 	b.WriteString(box(0.3, 2.15, 10.4, 2.2, colorCard))
@@ -691,7 +691,7 @@ func (c *controller) showInstanceSettings(cc *proxy.ClientConn, instanceID strin
 	}
 
 	var b strings.Builder
-	instanceFrame(&b, inst, instTabRules)
+	c.instanceFrame(&b, inst, instTabRules)
 
 	// Players.
 	b.WriteString(box(0.3, 2.15, 5.1, 3.15, colorCard))
