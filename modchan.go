@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/HimbeerserverDE/mt"
 	proxy "github.com/HimbeerserverDE/mt-multiserver-proxy"
 )
 
@@ -96,6 +97,7 @@ func (c *controller) handleBridgeMessage(cc *proxy.ClientConn, sender, msg strin
 		}
 		switch action {
 		case "open_world_tools":
+			c.setWorldToolsTab(cc.Name(), worldToolsHome)
 			c.showWorldTools(cc)
 		case "zone_edit_done":
 			c.handleZoneEditDone(cc, data)
@@ -298,8 +300,16 @@ func (c *controller) hopPlayer(cc *proxy.ClientConn, serverName string) error {
 	if err := cc.Hop(serverName); err != nil {
 		return err
 	}
+	// A panel left open would act on the world the player just left.
+	closeFormspec(cc)
 	c.scheduleReapplyStates(cc.Name(), 3*time.Second)
 	return nil
+}
+
+// closeFormspec closes the formspec the player has open. Only an empty
+// formspec does that, and ShowFormspec cannot send one: it adds the prepend.
+func closeFormspec(cc *proxy.ClientConn) {
+	cc.SendCmd(&mt.ToCltShowFormspec{})
 }
 
 func (c *controller) ensureChannelJoin(cc *proxy.ClientConn) {

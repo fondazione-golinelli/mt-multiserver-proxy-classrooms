@@ -156,6 +156,31 @@ func actionTile(b *strings.Builder, x, y, w float64, name, icon, caption, toolti
 		x, y+1.2, w, name, textColor, hyperEsc(caption)))
 }
 
+// menuTile is a large icon button with a title and a short description
+// underneath, for menus whose buttons each open a page.
+func menuTile(b *strings.Builder, x, y, w, h float64, name, icon, title, desc string) {
+	b.WriteString(fmt.Sprintf("style[%s;bgcolor=%s]", name, colorButton))
+	b.WriteString(fmt.Sprintf("image_button[%g,%g;%g,%g;%s;%s;]", x, y, w, h, fmtEsc(fitIcon(icon, w, h)), name))
+	b.WriteString(fmt.Sprintf("hypertext[%g,%g;%g,1.45;%s_caption;<global background=none margin=0>"+
+		"<center><b>%s</b>\n<style color=%s>%s</style></center>]",
+		x-0.05, y+h+0.12, w+0.1, name, hyperEsc(title), muted, hyperEsc(desc)))
+}
+
+// bigText draws one line of text larger than a label, e.g. a title.
+func bigText(x, y, w float64, name, color, text string) string {
+	return fmt.Sprintf("hypertext[%g,%g;%g,0.6;%s;<global background=none margin=0 valign=middle>"+
+		"<style color=%s size=20><b>%s</b></style>]", x, y, w, name, color, hyperEsc(text))
+}
+
+// chip is a small rounded-looking badge with a label; on highlights it.
+func chip(x, y, w float64, text string, on bool) string {
+	bg, fg := colorRow, muted
+	if on {
+		bg, fg = colorButton, light
+	}
+	return box(x, y, w, 0.42, bg) + coloredLbl(x+0.15, y+0.21, fg, text)
+}
+
 // hyperEsc escapes text for use inside hypertext[] markup.
 func hyperEsc(s string) string {
 	s = strings.ReplaceAll(s, "\\", "\\\\")

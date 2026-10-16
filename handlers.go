@@ -76,7 +76,7 @@ func prefixKey(fm map[string]string, prefix string) (string, bool) {
 	return "", false
 }
 
-// handleInstanceTabs switches between the Overview, Rules and Time & weather
+// handleInstanceTabs switches between the Settings, Rules and Time & weather
 // tabs of a world. It returns true when a tab button was pressed.
 func (c *controller) handleInstanceTabs(cc *proxy.ClientConn, fm map[string]string, inst *instanceData) bool {
 	if inst == nil {
@@ -140,6 +140,11 @@ func (c *controller) showParentForInstance(cc *proxy.ClientConn, inst *instanceD
 	case viewOriginAdminInstances:
 		c.showAdminPanelTab(cc, "instances")
 		return
+	case viewOriginWorldTools:
+		if c.currentManagedWorld(cc) != nil {
+			c.showWorldTools(cc)
+			return
+		}
 	case viewOriginAdminClasses:
 		if inst != nil && inst.ClassID != nil {
 			c.showClassViewWithOrigin(cc, *inst.ClassID, viewOriginAdminClasses)
@@ -442,6 +447,11 @@ func (c *controller) handleClassView(cc *proxy.ClientConn, fields []mt.Field) {
 	}
 
 	for k := range fm {
+		if strings.HasPrefix(k, "cur_tools_") {
+			c.setWorldToolsTab(cc.Name(), worldToolsHome)
+			c.showWorldTools(cc)
+			return
+		}
 		if strings.HasPrefix(k, "cur_rules_") || strings.HasPrefix(k, "cur_world_") {
 			instID := strings.TrimPrefix(strings.TrimPrefix(k, "cur_rules_"), "cur_world_")
 			inst, err := c.getInstanceByID(instID)
@@ -817,7 +827,7 @@ func (c *controller) handleInstanceSettings(cc *proxy.ClientConn, fields []mt.Fi
 	}
 
 	if _, ok := fm["btn_back"]; ok {
-		c.showInstanceViewWithOrigin(cc, inst.ID, c.getActiveInstanceOrigin(cc.Name()))
+		c.showParentForInstance(cc, inst)
 		return
 	}
 	if _, ok := fm["btn_capture_spawn"]; ok {
@@ -911,8 +921,8 @@ func (c *controller) handleWorldControls(cc *proxy.ClientConn, fields []mt.Field
 		return
 	}
 	if _, ok := fm["btn_back"]; ok {
-		if instID, ok := c.getActiveInstance(cc.Name()); ok {
-			c.showInstanceViewWithOrigin(cc, instID, c.getActiveInstanceOrigin(cc.Name()))
+		if _, ok := c.getActiveInstance(cc.Name()); ok {
+			c.showParentForInstance(cc, inst)
 		} else if classID, ok := c.getActiveClass(cc.Name()); ok {
 			c.showClassViewWithOrigin(cc, classID, c.getActiveClassOrigin(cc.Name()))
 		} else {

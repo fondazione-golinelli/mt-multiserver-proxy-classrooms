@@ -472,9 +472,23 @@ func (c *controller) applyGroupMove(cc *proxy.ClientConn, classID int, groups []
 
 // ── World Tools (third classroom item) ──────────────────────────────────────
 //
-// Opened by the World Tools item inside a world. Manages the world's zones:
-// starting the in-world zone editor, teleporting to zones, showing and
-// deleting them.
+// Opened by the World Tools item inside a world, on a home page whose tiles
+// lead to the zones and missions, the world map, time and weather, the rules
+// and the settings of the world. The zones page starts the in-world zone
+// editor, teleports to zones, shows and deletes them.
+
+// World Tools pages, kept per teacher in runtime.worldToolsTab.
+const (
+	worldToolsHome     = "home"
+	worldToolsZones    = "zones"
+	worldToolsMissions = "missions"
+)
+
+func (c *controller) setWorldToolsTab(player, tab string) {
+	c.mu.Lock()
+	c.runtime.worldToolsTab[player] = tab
+	c.mu.Unlock()
+}
 
 // currentManagedWorld returns the world the teacher stands in, if they may
 // manage it.
@@ -508,15 +522,14 @@ func (c *controller) showWorldTools(cc *proxy.ClientConn) {
 	c.mu.RLock()
 	tab := c.runtime.worldToolsTab[cc.Name()]
 	c.mu.RUnlock()
-	if tab != "missions" {
-		tab = "zones"
+	if tab != worldToolsZones && tab != worldToolsMissions {
+		c.showWorldToolsHome(cc, inst)
+		return
 	}
 
 	var b strings.Builder
 	fsOpen(&b, 11, 11.85)
-	fsHeader(&b, 11, T("World Tools"), inst.Title(), false, true)
-	b.WriteString(styledBtn(5.75, 0.2, 1.5, 0.6, "wt_map", T("Map"), colorPrimary))
-	b.WriteString(tooltip("wt_map", T("World map: zones, waypoints and teleport points for students")))
+	fsHeader(&b, 11, T("Zones & missions"), inst.Title(), true, true)
 	if inst.ClassID != nil {
 		b.WriteString(styledBtn(7.4, 0.2, 2.55, 0.6, "wt_groups", T("Edit groups"), colorButton))
 		b.WriteString(tooltip("wt_groups", T("Create groups and choose who is in each one")))
@@ -634,6 +647,47 @@ func (c *controller) showWorldTools(cc *proxy.ClientConn) {
 	cc.ShowFormspec("classrooms:world_tools", b.String())
 }
 
+// showWorldToolsHome is the first World Tools page: the world it acts on and
+// one tile per tool.
+func (c *controller) showWorldToolsHome(cc *proxy.ClientConn, inst *instanceData) {
+	const w = 14.0
+	var b strings.Builder
+	fsOpen(&b, w, 7.45)
+	fsHeader(&b, w, T("World Tools"), T("Tools of the world you are in"), false, true)
+	if inst.ClassID != nil {
+		b.WriteString(styledBtn(w-3.85, 0.2, 2.75, 0.6, "wt_groups", T("Edit groups"), colorButton))
+		b.WriteString(tooltip("wt_groups", T("Create groups and choose who is in each one")))
+	}
+
+	// The world.
+	b.WriteString(box(0.3, 1.3, w-0.6, 1.75, colorCurrent))
+	b.WriteString(box(0.3, 1.3, 0.1, 1.75, colorActive))
+	b.WriteString(fmt.Sprintf("image[0.65,1.42;1.5,1.5;%s]", c.templateIcon(inst.TemplateName)))
+	b.WriteString(bigText(2.4, 1.4, w-3.0, "wt_world_title", light, inst.Title()))
+	b.WriteString(fmt.Sprintf("label[2.45,2.25;%s]", fmtEsc(
+		mcColorize(instanceStatusColor(inst.Status), instanceStatusLabel(inst.Status))+
+			mcColorize(muted, "  ·  "+c.templateLabel(inst.TemplateName)))))
+	if rules, _, ok := c.worldRules(inst); ok {
+		b.WriteString(hint(2.45, 2.7, strings.Join(rules, "  ·  ")))
+	}
+
+	// The tools.
+	const tileW, tileH, gap = 2.5, 2.0, 0.225
+	tiles := []struct{ name, icon, title, desc string }{
+		{"wt_go_zones", iconToolZones, T("Zones & missions"), T("Protect areas and set goals")},
+		{"wt_map", iconToolMap, T("Map"), T("Waypoints and teleport points")},
+		{"wt_go_time", iconToolTime, T("Time & weather"), T("Day, night and rain")},
+		{"wt_go_rules", iconToolRules, T("Rules"), T("Damage, PvP, hunger, mobs")},
+		{"wt_go_settings", iconToolSettings, T("Settings"), T("Start/stop, guests, delete")},
+	}
+	for i, t := range tiles {
+		menuTile(&b, 0.3+float64(i)*(tileW+gap), 3.35, tileW, tileH, t.name, t.icon, t.title, t.desc)
+	}
+	b.WriteString(tooltip("wt_map", T("World map: zones, waypoints and teleport points for students")))
+
+	cc.ShowFormspec("classrooms:world_tools", b.String())
+}
+
 func (c *controller) handleWorldTools(cc *proxy.ClientConn, fields []mt.Field) {
 	inst := c.currentManagedWorld(cc)
 	if inst == nil {
@@ -655,14 +709,38 @@ func (c *controller) handleWorldTools(cc *proxy.ClientConn, fields []mt.Field) {
 		}
 	}
 
-	for _, t := range []string{"zones", "missions"} {
+	for _, t := range []string{worldToolsZones, worldToolsMissions} {
 		if _, ok := fm["wt_tab_"+t]; ok {
-			c.mu.Lock()
-			c.runtime.worldToolsTab[cc.Name()] = t
-			c.mu.Unlock()
+			c.setWorldToolsTab(cc.Name(), t)
 			c.showWorldTools(cc)
 			return
 		}
+	}
+	if _, ok := fm["btn_back"]; ok {
+		c.setWorldToolsTab(cc.Name(), worldToolsHome)
+		c.showWorldTools(cc)
+		return
+	}
+	if _, ok := fm["wt_go_zones"]; ok {
+		c.setWorldToolsTab(cc.Name(), worldToolsZones)
+		c.showWorldTools(cc)
+		return
+	}
+	// Time & weather, Rules and Settings are the world pages of the class
+	// panel; their Back returns here.
+	if _, ok := fm["wt_go_time"]; ok {
+		c.setActiveInstanceWithOrigin(cc.Name(), inst.ID, viewOriginWorldTools)
+		c.showWorldControls(cc, inst.ID)
+		return
+	}
+	if _, ok := fm["wt_go_rules"]; ok {
+		c.setActiveInstanceWithOrigin(cc.Name(), inst.ID, viewOriginWorldTools)
+		c.showInstanceSettings(cc, inst.ID)
+		return
+	}
+	if _, ok := fm["wt_go_settings"]; ok {
+		c.showInstanceViewWithOrigin(cc, inst.ID, viewOriginWorldTools)
+		return
 	}
 	c.rememberMissionPick(cc.Name(), fm)
 	if _, ok := fm["wm_create"]; ok {

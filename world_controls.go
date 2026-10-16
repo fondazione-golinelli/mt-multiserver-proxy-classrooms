@@ -64,7 +64,7 @@ func (c *controller) showWorldControls(cc *proxy.ClientConn, instanceID string) 
 			b.WriteString(hint(1.4, 3.3, T("Join it, then open this tab again.")))
 			b.WriteString(styledBtn(1.4, 3.9, 3.5, 0.75, "btn_hop_me", T("Go there"), colorPrimary))
 		} else {
-			b.WriteString(hint(1.4, 3.3, T("The world is off: start it from the Overview tab.")))
+			b.WriteString(hint(1.4, 3.3, T("The world is off: start it from the Settings tab.")))
 		}
 		cc.ShowFormspec("classrooms:world_controls", b.String())
 		return

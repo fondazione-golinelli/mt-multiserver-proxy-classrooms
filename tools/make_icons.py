@@ -221,8 +221,118 @@ def mars_features(x, y, u, v, rng):
     return col
 
 
+# ── World Tools menu ──────────────────────────────────────────────────────────
+
+def outline(img):
+    """Darken every opaque pixel that touches a transparent one."""
+    px = img.load()
+    edge = [(x, y) for y in range(N) for x in range(N) if px[x, y][3] and any(
+        not (0 <= x + dx < N and 0 <= y + dy < N) or not px[x + dx, y + dy][3]
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))]
+    for p in edge:
+        px[p] = OUTLINE
+
+
+def tool_zones():
+    # a flag planted in a fenced patch of grass
+    img, d = canvas()
+    d.polygon([(15.5, 14), (30, 21), (15.5, 28), (1, 21)], fill=(98, 160, 64))
+    for i, (x, y) in enumerate([(15.5, 14), (30, 21), (15.5, 28), (1, 21), (15.5, 14)][:-1]):
+        nx, ny = [(30, 21), (15.5, 28), (1, 21), (15.5, 14)][i]
+        for t in range(0, 16):
+            if t % 4 < 2:
+                d.point((round(x + (nx - x) * t / 16), round(y + (ny - y) * t / 16)), fill=(250, 214, 70))
+    outline(img)
+    d.rectangle([14, 3, 15, 22], fill=(110, 80, 50))
+    d.polygon([(16, 3), (27, 7), (16, 11)], fill=(233, 69, 96))
+    d.line([(16, 10), (26, 7)], fill=(176, 40, 62))
+    d.rectangle([13, 21, 16, 22], fill=(60, 44, 28))
+    save(img, "tool_zones")
+
+
+def tool_map():
+    # a folded paper map with a dotted path to an X
+    img, d = canvas()
+    panels = [(2, 6, 11, 27), (11, 4, 21, 25), (21, 6, 30, 27)]
+    colors = [(236, 222, 176), (214, 198, 150), (236, 222, 176)]
+    for (x0, y0, x1, y1), col in zip(panels, colors):
+        d.polygon([(x0, y0), (x1, y0 - 2 if x0 == 2 else y0 + 2), (x1, y1 - 2 if x0 == 2 else y1 + 2), (x0, y1)], fill=col)
+    d.ellipse([4, 15, 10, 21], fill=(110, 170, 90))
+    d.ellipse([22, 9, 28, 14], fill=(90, 140, 210))
+    for x, y in [(6, 12), (8, 10), (10, 9), (12, 9), (14, 10), (16, 12), (18, 14), (20, 16), (22, 18)]:
+        d.point((x, y), fill=(160, 60, 50))
+    d.line([(22, 19), (26, 23)], fill=(210, 40, 40), width=2)
+    d.line([(26, 19), (22, 23)], fill=(210, 40, 40), width=2)
+    outline(img)
+    save(img, "tool_map")
+
+
+def tool_time():
+    # sun behind a rain cloud
+    img, d = canvas()
+    for a in range(8):
+        ang = a * math.pi / 4
+        d.line([(12 + 7 * math.cos(ang), 11 + 7 * math.sin(ang)), (12 + 10 * math.cos(ang), 11 + 10 * math.sin(ang))],
+               fill=(250, 200, 50), width=2)
+    d.ellipse([6, 5, 18, 17], fill=(250, 204, 60))
+    d.ellipse([8, 7, 13, 11], fill=(255, 236, 140))
+    cloud = Image.new("RGBA", (N, N), (0, 0, 0, 0))
+    cd = ImageDraw.Draw(cloud)
+    for box_ in [(11, 15, 21, 24), (17, 11, 28, 22), (23, 16, 31, 24), (12, 19, 30, 25)]:
+        cd.ellipse(box_, fill=(226, 232, 242))
+    cd.ellipse([18, 12, 24, 17], fill=(248, 250, 255))
+    outline(cloud)
+    img.alpha_composite(cloud)
+    for x, y in [(15, 27), (21, 28), (27, 27)]:
+        d.line([(x, y), (x - 1, y + 2)], fill=(80, 140, 230), width=1)
+    save(img, "tool_time")
+
+
+def tool_rules():
+    # clipboard with a checklist
+    img, d = canvas()
+    d.rectangle([5, 4, 26, 30], fill=(150, 104, 62))
+    d.rectangle([8, 7, 23, 28], fill=(246, 244, 236))
+    outline(img)
+    d.rectangle([11, 2, 20, 6], fill=(150, 156, 170))
+    d.rectangle([12, 3, 19, 5], fill=(190, 196, 210))
+    for i, y in enumerate((11, 17, 23)):
+        col = (60, 170, 80) if i < 2 else (210, 60, 60)
+        if i < 2:
+            d.line([(10, y), (11, y + 1), (14, y - 2)], fill=col, width=1)
+        else:
+            d.line([(10, y - 2), (13, y + 1)], fill=col)
+            d.line([(13, y - 2), (10, y + 1)], fill=col)
+        d.line([(16, y), (21, y)], fill=(120, 124, 140))
+    save(img, "tool_rules")
+
+
+def tool_settings():
+    # a gear
+    img, d = canvas()
+    cx = cy = 15.5
+    px = img.load()
+    for y in range(N):
+        for x in range(N):
+            dx, dy = x - cx, y - cy
+            r, ang = math.hypot(dx, dy), math.atan2(dy, dx)
+            tooth = (math.cos(ang * 8) > 0.35)
+            if 4.5 < r <= (13.5 if tooth else 10.5):
+                k = 1.15 - 0.4 * max(0.0, (dx + dy) / 20 + 0.3)
+                base = (150, 160, 180)
+                px[x, y] = tuple(min(255, int(c * k)) for c in base) + (255,)
+    outline(img)
+    d.ellipse([11, 11, 20, 20], outline=OUTLINE)
+    save(img, "tool_settings")
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
+    tool_zones()
+    tool_map()
+    tool_time()
+    tool_rules()
+    tool_settings()
     flag("italy", [(1, (0, 146, 70)), (1, (244, 245, 240)), (1, (206, 43, 55))], vertical=True)
     flag("spain", [(1, (170, 21, 27)), (2, (241, 191, 0)), (1, (170, 21, 27))], extra=spain_arms)
     flag("hungary", [(1, (205, 42, 62)), (1, (244, 245, 240)), (1, (67, 111, 77))])

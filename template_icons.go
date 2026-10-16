@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// Map template icons for the template picker, drawn by tools/make_icons.py.
-// They are sent inline as "[png:<base64>" textures, so neither the lobby nor
+// Map template icons and World Tools menu icons, drawn by
+// tools/make_icons.py. They are sent inline as "[png:<base64>" textures, so neither the lobby nor
 // the instance pool needs them as media.
 //
 //go:embed icons/*.png
@@ -43,4 +43,21 @@ func (c *controller) templateIcon(key string) string {
 		return icon
 	}
 	return iconGlobe
+}
+
+// World Tools menu icons (icons/tool_*.png).
+var (
+	iconToolZones    = embeddedIcon("tool_zones", iconStar)
+	iconToolMap      = embeddedIcon("tool_map", iconGlobe)
+	iconToolTime     = embeddedIcon("tool_time", iconRefresh)
+	iconToolRules    = embeddedIcon("tool_rules", iconCheck)
+	iconToolSettings = embeddedIcon("tool_settings", iconGear)
+)
+
+// embeddedIcon returns the embedded icon called name, or fallback.
+func embeddedIcon(name, fallback string) string {
+	if icon, ok := templateIcons[name]; ok {
+		return icon
+	}
+	return fallback
 }
