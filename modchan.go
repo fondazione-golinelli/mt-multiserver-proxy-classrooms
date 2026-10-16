@@ -82,6 +82,13 @@ func (c *controller) handleBridgeMessage(cc *proxy.ClientConn, sender, msg strin
 		}
 		return
 	}
+	if action == "blockexchange_linked" {
+		player, _ := data["player"].(string)
+		if player == cc.Name() {
+			c.linkBlockExchangeAccount(player, data)
+		}
+		return
+	}
 	if action == "open_world_tools" || action == "zone_edit_done" || action == "zone_edit_cancelled" {
 		player, _ := data["player"].(string)
 		if player != cc.Name() {
@@ -270,10 +277,11 @@ func (c *controller) reapplyTeacherContext(playerName string) {
 		worldToolsAccess = c.canManageInstance(inst, playerName)
 	}
 	if !c.sendToPlayerServer(playerName, map[string]interface{}{
-		"action":               action,
-		"player":               playerName,
-		"blockexchange_access": blockExchangeAccess,
-		"world_tools_access":   worldToolsAccess,
+		"action":                   action,
+		"player":                   playerName,
+		"blockexchange_access":     blockExchangeAccess,
+		"blockexchange_institutes": c.blockExchangeInstitutes(blockExchangeAccess),
+		"world_tools_access":       worldToolsAccess,
 	}) {
 		log.Printf("[%s] failed to apply teacher context %s for %s on %s", pluginName, action, playerName, cc.ServerName())
 	}

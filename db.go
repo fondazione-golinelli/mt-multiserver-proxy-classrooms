@@ -187,6 +187,10 @@ func migrateDB(db *sql.DB) error {
 		"ALTER TABLE teachers ADD COLUMN institute VARCHAR(100) NOT NULL DEFAULT '' AFTER username"); err != nil {
 		return err
 	}
+	if err := addColumnIfMissing(db, "teachers", "bx_username",
+		"ALTER TABLE teachers ADD COLUMN bx_username VARCHAR(100) NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
 	if err := addColumnIfMissing(db, "instances", "institute",
 		"ALTER TABLE instances ADD COLUMN institute VARCHAR(100) NOT NULL DEFAULT '' AFTER created_by"); err != nil {
 		return err
