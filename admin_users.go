@@ -14,7 +14,8 @@ import (
 // One table of every account and every name with a classroom role, with its
 // role, institute and class. Rows are edited in place: changing the role
 // dropdown redraws the row with the fields that role needs (draft), Save
-// applies it.
+// applies it. Choosing Administrator asks for confirmation and applies at
+// once. "+ New user" in the header opens the new account dialog.
 
 const (
 	roleAdmin      = "admin"
@@ -24,12 +25,10 @@ const (
 	roleUser       = "user"
 
 	maxUserRows = 60
-	usersPanelW = 17.0
-	usersPanelH = 9.6
 )
 
 // editableRoles are the choices of a row's role dropdown, in order.
-var editableRoles = []string{roleUser, roleStudent, roleAssistance, roleTeacher}
+var editableRoles = []string{roleUser, roleStudent, roleAssistance, roleTeacher, roleAdmin}
 
 // roleFilters are the choices of the role filter, after "All roles".
 var roleFilters = []string{roleAdmin, roleTeacher, roleAssistance, roleStudent, roleUser}
@@ -81,6 +80,7 @@ type classInfo struct {
 type userRow struct {
 	Name           string
 	Registered     bool
+	ConfigAdmin    bool   // administrator from the proxy configuration
 	Role           string // primary role, see primaryRole
 	Creator        string
 	TeacherInstID  int
@@ -214,7 +214,8 @@ func (c *controller) loadUserRows(classes map[int]classInfo) map[string]*userRow
 		sort.Slice(r.AssistClasses, func(i, j int) bool {
 			return classes[r.AssistClasses[i]].Name < classes[r.AssistClasses[j]].Name
 		})
-		r.Role = r.primaryRole(teachers[r.Name], isProxyAdmin(r.Name))
+		r.ConfigAdmin = isProxyAdmin(r.Name)
+		r.Role = r.primaryRole(teachers[r.Name], r.ConfigAdmin || c.isPanelAdmin(r.Name))
 		r.Institute = teacherInst[r.Name]
 		if r.Institute == "" && r.StudentClass != 0 {
 			r.Institute = classes[r.StudentClass].InstituteName
@@ -395,7 +396,7 @@ func (c *controller) writeAdminUsersTab(cc *proxy.ClientConn, b *strings.Builder
 	}
 
 	// Filters: the dropdowns apply at once, the search with Enter.
-	b.WriteString(box(0.2, 2.05, usersPanelW-0.4, 0.8, colorCard))
+	b.WriteString(box(0.2, 2.05, adminW-0.4, 0.8, colorCard))
 	b.WriteString(fmt.Sprintf("image[0.4,2.22;0.45,0.45;%s]", iconSearch))
 	b.WriteString(fmt.Sprintf("field[1.0,2.2;3.0,0.5;users_search;;%s]", fmtEsc(v.Search)))
 	b.WriteString("field_close_on_enter[users_search;false]")
@@ -418,12 +419,12 @@ func (c *controller) writeAdminUsersTab(cc *proxy.ClientConn, b *strings.Builder
 	}
 	if len(shown) > maxUserRows {
 		shown = shown[:maxUserRows]
-		b.WriteString(hint(0.5, usersPanelH-0.25, T("Only the first @1 are shown: refine the search.", maxUserRows)))
+		b.WriteString(hint(0.5, adminH-0.2, T("Only the first @1 are shown: refine the search.", maxUserRows)))
 	}
 
-	const listTop, listH, rowH, rowStep = 3.4, 5.75, 0.72, 0.8
-	b.WriteString(scrollbarAt("scr_admin_users", usersPanelW-0.5, listTop, listH, len(shown), rowStep, 0.05, v.Scroll))
-	b.WriteString(fmt.Sprintf("scroll_container[0.2,%g;%g,%g;scr_admin_users;vertical;0.1]", listTop, usersPanelW-0.75, listH))
+	const listTop, listH, rowH, rowStep = 3.4, adminH - 3.85, 0.72, 0.8
+	b.WriteString(scrollbarAt("scr_admin_users", adminW-0.5, listTop, listH, len(shown), rowStep, 0.05, v.Scroll))
+	b.WriteString(fmt.Sprintf("scroll_container[0.2,%g;%g,%g;scr_admin_users;vertical;0.1]", listTop, adminW-0.75, listH))
 	c.mu.RLock()
 	drafts := make(map[string]string, len(v.Draft))
 	for k, d := range v.Draft {
@@ -432,15 +433,18 @@ func (c *controller) writeAdminUsersTab(cc *proxy.ClientConn, b *strings.Builder
 	c.mu.RUnlock()
 	y := 0.05
 	for _, r := range shown {
+		// Proxy-configuration administrators and your own administrator
+		// role cannot be changed here.
+		locked := r.ConfigAdmin || (r.Role == roleAdmin && r.Name == cc.Name())
 		role, isDraft := r.Role, false
-		if d, ok := drafts[r.Name]; ok && r.Role != roleAdmin {
+		if d, ok := drafts[r.Name]; ok && !locked {
 			role, isDraft = d, d != r.Role
 		}
 		rowColor := colorCard
 		if isDraft {
 			rowColor = colorCurrent
 		}
-		b.WriteString(box(0, y, usersPanelW-0.8, rowH, rowColor))
+		b.WriteString(box(0, y, adminW-0.8, rowH, rowColor))
 		dot := muted
 		if proxy.Find(r.Name) != nil {
 			dot = success
@@ -463,8 +467,13 @@ func (c *controller) writeAdminUsersTab(cc *proxy.ClientConn, b *strings.Builder
 		}
 
 		fy := y + 0.11
-		if r.Role == roleAdmin {
+		if locked {
 			b.WriteString(fmt.Sprintf("label[3.85,%g;%s]", y+0.36, fmtEsc(mcColorize(warning, roleLabel(roleAdmin)))))
+			tip := T("You cannot remove your own administrator rights.")
+			if r.ConfigAdmin {
+				tip = T("Set in the proxy configuration (PROXY_ADMIN_USERS): it cannot be changed here.")
+			}
+			b.WriteString(fmt.Sprintf("tooltip[3.75,%g;2.7,%g;%s]", y, rowH, fmtEsc(tip)))
 		} else {
 			idx := 1
 			for i, er := range editableRoles {
@@ -529,7 +538,7 @@ func (c *controller) writeAdminUsersTab(cc *proxy.ClientConn, b *strings.Builder
 			muteLbl(9.75, "—")
 		}
 
-		if r.Role != roleAdmin {
+		if !locked {
 			saveColor := colorButton
 			if isDraft {
 				saveColor = colorPrimary
@@ -619,6 +628,10 @@ func (c *controller) handleAdminUsers(cc *proxy.ClientConn, fm map[string]string
 			continue
 		}
 		role := editableRoles[idx-1]
+		if role == roleAdmin && users[name].Role != roleAdmin {
+			c.askAdminConfirm(cc, name, false)
+			return true
+		}
 		c.mu.Lock()
 		current, hasDraft := v.Draft[name]
 		if !hasDraft {
@@ -647,7 +660,11 @@ func (c *controller) handleAdminUsers(cc *proxy.ClientConn, fm map[string]string
 			}
 			instituteID, _ := instituteFromIndex(fm["inst_"+name], institutes)
 			classID, _ := classFromIndex(fm["class_"+name], classList)
-			_, msg := c.setUserRole(r, role, instituteID, classID)
+			if role == roleAdmin && r.Role != roleAdmin {
+				c.askAdminConfirm(cc, name, false)
+				return true
+			}
+			_, msg := c.setUserRole(cc.Name(), r, role, instituteID, classID)
 			c.notify(cc, msg)
 			c.mu.Lock()
 			delete(v.Draft, name)
@@ -675,16 +692,28 @@ func (c *controller) handleAdminUsers(cc *proxy.ClientConn, fm map[string]string
 }
 
 // setUserRole gives a user exactly one classroom role. Teachers keep their
-// class links; the other roles replace the user's class memberships.
-func (c *controller) setUserRole(r *userRow, role string, instituteID, classID int) (bool, string) {
+// class links; the other roles replace the user's class memberships. A panel
+// administrator given another role loses the administrator rights; keeping
+// Administrator keeps everything as it is.
+func (c *controller) setUserRole(actor string, r *userRow, role string, instituteID, classID int) (bool, string) {
 	name := r.Name
-	if isProxyAdmin(name) {
+	if r.ConfigAdmin {
 		return false, T("Administrators are managed in the proxy configuration.")
+	}
+	wasAdmin := c.isPanelAdmin(name)
+	if role == roleAdmin {
+		if wasAdmin {
+			return true, T("@1 is now: @2.", name, roleLabel(roleAdmin))
+		}
+		return c.grantPanelAdmin(actor, name)
+	}
+	if wasAdmin && name == actor {
+		return false, T("You cannot remove your own administrator rights.")
 	}
 	if (role == roleStudent || role == roleAssistance) && classID == 0 {
 		return false, T("Choose a class for @1.", name)
 	}
-	if role != roleTeacher && r.Role == roleTeacher {
+	if role != roleTeacher {
 		var owned int
 		if err := c.db.QueryRow("SELECT COUNT(*) FROM classes WHERE created_by = ?", name).Scan(&owned); err != nil {
 			return false, T("Database error.")
@@ -707,6 +736,9 @@ func (c *controller) setUserRole(r *userRow, role string, instituteID, classID i
 		return true
 	}
 	ok := true
+	if wasAdmin {
+		ok = ok && exec("DELETE FROM panel_admins WHERE username = ?", name)
+	}
 	if role != roleTeacher {
 		ok = ok && exec("DELETE FROM teachers WHERE username = ?", name)
 	}
@@ -733,6 +765,9 @@ func (c *controller) setUserRole(r *userRow, role string, instituteID, classID i
 	}
 	if !ok || tx.Commit() != nil {
 		return false, T("Saving @1 failed.", name)
+	}
+	if wasAdmin {
+		c.forgetPanelAdmin(actor, name)
 	}
 	if proxy.Find(name) != nil {
 		c.scheduleReapplyStates(name, 0)

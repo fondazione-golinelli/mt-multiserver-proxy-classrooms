@@ -30,6 +30,9 @@ func (c *controller) registerHandlers() {
 	proxy.RegisterOnPlayerReceiveFields("classrooms:mission", c.handleMissionEditor)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:password", c.handlePasswordDialog)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:admin_world", c.handleAdminWorldVisits)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:admin_new_user", c.handleNewUserDialog)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:admin_new_class", c.handleNewClassDialog)
+	proxy.RegisterOnPlayerReceiveFields("classrooms:admin_confirm", c.handleAdminConfirm)
 	proxy.RegisterOnPlayerReceiveFields("classrooms:return_hub", c.handleReturnHubDialog)
 	proxy.RegisterOnPlayerReceiveFields(minigamesForm, c.handleMinigames)
 }
@@ -1066,6 +1069,40 @@ func (c *controller) handleAdminPanel(cc *proxy.ClientConn, fields []mt.Field) {
 		return
 	}
 
+	if _, ok := fm["btn_admin_new_user"]; ok {
+		c.showNewUserDialog(cc)
+		return
+	}
+	if _, ok := fm["btn_admin_new_class"]; ok {
+		institute, _ := c.getAdminFilters(cc.Name())
+		institutes, _ := c.listInstitutes()
+		c.updateAdminForm(cc.Name(), func(f *adminFormState) {
+			// Start from the institute shown in the Classes tab.
+			f.NewClass = newClassDraft{}
+			for _, in := range institutes {
+				if in.Name == institute {
+					f.NewClass.InstituteID = in.ID
+				}
+			}
+		})
+		c.showNewClassDialog(cc)
+		return
+	}
+	if c.getAdminTab(cc.Name()) == "institutes" {
+		_, clear := fm["btn_institute_search_clear"]
+		_, search := fm["btn_institute_search"]
+		if clear || search || fm["key_enter_field"] == "institute_search" {
+			c.updateAdminForm(cc.Name(), func(f *adminFormState) {
+				f.InstituteSearch = ""
+				if !clear {
+					f.InstituteSearch = strings.TrimSpace(fm["institute_search"])
+				}
+			})
+			c.showAdminPanelTab(cc, "institutes")
+			return
+		}
+	}
+
 	if c.handleAdminUsers(cc, fm) {
 		return
 	}
@@ -1076,6 +1113,7 @@ func (c *controller) handleAdminPanel(cc *proxy.ClientConn, fields []mt.Field) {
 
 	if _, ok := fm["btn_admin_filter_clear"]; ok {
 		c.setAdminFilters(cc.Name(), "", "")
+		c.updateAdminForm(cc.Name(), func(f *adminFormState) { f.ClassFilter = classFilterAll })
 		c.showAdminPanelTab(cc, c.getAdminTab(cc.Name()))
 		return
 	}
@@ -1354,24 +1392,38 @@ func (c *controller) handleAdminWorldVisits(cc *proxy.ClientConn, fields []mt.Fi
 
 // applyAdminFilters reacts to the institute and teacher dropdowns of the
 // Worlds and Classes tabs, which submit the form when changed.
+// applyAdminFilters applies the filter dropdowns of the Worlds and Classes
+// tabs. A new institute resets the class and teacher filters, whose choices
+// depend on it.
 func (c *controller) applyAdminFilters(cc *proxy.ClientConn, fm map[string]string) bool {
 	tab := c.getAdminTab(cc.Name())
 	if tab != "instances" && tab != "classes" {
 		return false
 	}
-	institutes, teachers := c.adminFilterValues()
+	institutes := c.adminInstituteValues()
 	institute, teacher := c.getAdminFilters(cc.Name())
-	newInstitute, newTeacher := institute, teacher
-	if idx, ok := scrollValue(fm["admin_filter_institute"]); ok && idx >= 1 && idx <= len(institutes) {
-		newInstitute = institutes[idx-1]
+	if idx, ok := scrollValue(fm["admin_filter_institute"]); ok && idx >= 1 && idx <= len(institutes) &&
+		institutes[idx-1] != institute {
+		c.setAdminFilters(cc.Name(), institutes[idx-1], "")
+		c.updateAdminForm(cc.Name(), func(f *adminFormState) { f.ClassFilter = classFilterAll })
+		c.showAdminPanelTab(cc, tab)
+		return true
 	}
-	if idx, ok := scrollValue(fm["admin_filter_teacher"]); ok && idx >= 1 && idx <= len(teachers) {
-		newTeacher = teachers[idx-1]
-	}
-	if newInstitute == institute && newTeacher == teacher {
+	if tab == "instances" {
+		_, values := c.adminClassFilterValues(institute)
+		current := c.adminFormCopy(cc.Name()).ClassFilter
+		if idx, ok := scrollValue(fm["admin_filter_class"]); ok && idx >= 1 && idx <= len(values) && values[idx-1] != current {
+			c.updateAdminForm(cc.Name(), func(f *adminFormState) { f.ClassFilter = values[idx-1] })
+			c.showAdminPanelTab(cc, tab)
+			return true
+		}
 		return false
 	}
-	c.setAdminFilters(cc.Name(), newInstitute, newTeacher)
-	c.showAdminPanelTab(cc, tab)
-	return true
+	teachers := c.adminTeacherValues(institute)
+	if idx, ok := scrollValue(fm["admin_filter_teacher"]); ok && idx >= 1 && idx <= len(teachers) && teachers[idx-1] != teacher {
+		c.setAdminFilters(cc.Name(), institute, teachers[idx-1])
+		c.showAdminPanelTab(cc, tab)
+		return true
+	}
+	return false
 }

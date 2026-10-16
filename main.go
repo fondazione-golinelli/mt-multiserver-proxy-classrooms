@@ -140,6 +140,7 @@ type runtimeState struct {
 	adminTab             map[string]string           // player -> current admin tab
 	adminInstituteFilter map[string]string           // player -> current admin institute filter
 	adminTeacherFilter   map[string]string           // player -> current admin teacher filter
+	adminForms           map[string]*adminFormState  // player -> admin class filter, search, dialogs
 	adminUsers           map[string]*adminUsersView  // player -> admin Users tab filters and drafts
 	passwordTarget       map[string]passwordTarget   // player -> account in the password dialog
 	pendingOps           map[string]struct{}         // player -> in-flight operation
@@ -170,6 +171,7 @@ func newRuntimeState() runtimeState {
 		adminTab:             make(map[string]string),
 		adminInstituteFilter: make(map[string]string),
 		adminTeacherFilter:   make(map[string]string),
+		adminForms:           make(map[string]*adminFormState),
 		adminUsers:           make(map[string]*adminUsersView),
 		passwordTarget:       make(map[string]passwordTarget),
 		pendingOps:           make(map[string]struct{}),
@@ -196,6 +198,9 @@ type controller struct {
 	httpClient *http.Client
 
 	mu sync.RWMutex // protects runtime state
+
+	adminMu     sync.RWMutex    // protects panelAdmins
+	panelAdmins map[string]bool // administrators granted from the panel
 
 	nodeMu    sync.Mutex
 	nodeCache map[int]nodeEndpoint
@@ -232,6 +237,10 @@ func init() {
 			runtime:    newRuntimeState(),
 			httpClient: &http.Client{Timeout: 30 * time.Second},
 			nodeCache:  make(map[int]nodeEndpoint),
+		}
+		if err := c.loadPanelAdmins(); err != nil {
+			log.Printf("[%s] failed to load panel administrators: %v", pluginName, err)
+			c.panelAdmins = make(map[string]bool)
 		}
 
 		ctrl = c
@@ -474,13 +483,12 @@ func firstExistingPath(paths ...string) (string, bool) {
 	return "", false
 }
 
-// isTeacher checks if a player is a registered teacher or has server perms.
+// isTeacher checks if a player is a registered teacher or an administrator.
 func (c *controller) isTeacher(name string) bool {
 	if ok, _ := c.getTeacher(name); ok {
 		return true
 	}
-	cc := proxy.Find(name)
-	return cc != nil && cc.HasPerms("server")
+	return c.isAdmin(name)
 }
 
 // hasClassPanelAccess includes full teachers, proxy administrators, and players
@@ -489,8 +497,12 @@ func (c *controller) hasClassPanelAccess(name string) bool {
 	return c.isTeacher(name) || c.isAssistant(name)
 }
 
-// isAdmin checks if a player has server-level proxy permissions.
+// isAdmin checks if a player has server-level proxy permissions or was made
+// an administrator from the panel.
 func (c *controller) isAdmin(name string) bool {
+	if c.isPanelAdmin(name) {
+		return true
+	}
 	cc := proxy.Find(name)
 	return cc != nil && cc.HasPerms("server")
 }

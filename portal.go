@@ -96,11 +96,12 @@ func (c *controller) showPortalWorlds(cc *proxy.ClientConn) {
 	byTeacherInside(others)
 
 	var b strings.Builder
-	fsOpen(&b, 12.6, 10)
-	fsHeader(&b, 12.6, T("Class worlds"), T("Live class worlds you can enter"), false, true)
+	const w = 14.5
+	fsOpen(&b, w, 10.4)
+	fsHeader(&b, w, T("Class worlds"), T("Live class worlds you can enter"), false, true)
 
 	if len(instances) == 0 {
-		b.WriteString(box(0.3, 1.3, 12, 2.0, colorCard))
+		b.WriteString(box(0.3, 1.3, w-0.6, 2.0, colorCard))
 		b.WriteString(fmt.Sprintf("image[0.6,1.65;0.55,0.55;%s]", iconGlobe))
 		b.WriteString(coloredLbl(1.35, 1.95, light, T("No class worlds are open right now.")))
 		b.WriteString(hint(1.35, 2.45, T("Come back when your teacher opens one.")))
@@ -108,14 +109,15 @@ func (c *controller) showPortalWorlds(cc *proxy.ClientConn) {
 		return
 	}
 
-	const cardH, gap = 1.3, 0.12
+	const cardH, gap = 1.4, 0.12
 	rows := len(instances) + 1
 	if len(mine) > 0 && len(others) > 0 {
 		rows++
 	}
-	listH := 7.2
-	b.WriteString(scrollbarFor("scr_portal_worlds", 12.15, 1.3, listH, rows, cardH+gap, 0.05))
-	b.WriteString(fmt.Sprintf("scroll_container[0.3,1.3;11.75,%g;scr_portal_worlds;vertical;0.1]", listH))
+	listH := 7.5
+	b.WriteString(scrollbarFor("scr_portal_worlds", w-0.45, 1.3, listH, rows, cardH+gap, 0.05))
+	b.WriteString(fmt.Sprintf("scroll_container[0.3,1.3;%g,%g;scr_portal_worlds;vertical;0.1]", w-0.85, listH))
+	const cardW, btnX = w - 0.95, w - 3.4
 	y := 0.05
 	section := func(title string) {
 		b.WriteString(sectionTitle(0.1, y+0.3, title))
@@ -127,11 +129,12 @@ func (c *controller) showPortalWorlds(cc *proxy.ClientConn) {
 		if own {
 			bg = colorCurrent
 		}
-		b.WriteString(box(0, y, 11.65, cardH, bg))
+		b.WriteString(box(0, y, cardW, cardH, bg))
 		if own {
 			b.WriteString(box(0, y, 0.1, cardH, colorActive))
 		}
-		b.WriteString(statusDot(0.3, y+0.24, success))
+		b.WriteString(fmt.Sprintf("image[0.3,%g;1.1,1.1;%s]", y+0.15, c.templateIcon(inst.TemplateName)))
+		b.WriteString(statusDot(1.65, y+0.27, success))
 		title := mcColorize(light, inst.Title())
 		if staffInside[inst.ID] {
 			title += mcColorize(success, "   ● "+T("Teacher inside"))
@@ -139,32 +142,32 @@ func (c *controller) showPortalWorlds(cc *proxy.ClientConn) {
 		if cc.ServerName() == inst.ProxyName {
 			title += mcColorize(warning, "   ● "+T("You are here"))
 		}
-		b.WriteString(fmt.Sprintf("label[0.7,%g;%s]", y+0.33, fmtEsc(title)))
+		b.WriteString(fmt.Sprintf("label[2.0,%g;%s]", y+0.38, fmtEsc(title)))
 		players := len(c.playersOnInstance(inst.ProxyName))
 		teacher := []rune(inst.CreatedBy)
 		if len(teacher) > 14 {
 			teacher = append(teacher[:13], '…')
 		}
-		details := T("Map: @1  ·  Teacher: @2  ·  @3 players inside", c.templateLabel(inst.TemplateName), string(teacher), players)
-		b.WriteString(fmt.Sprintf("label[0.7,%g;%s]", y+0.7, fmtEsc(mcColorize(muted, details))))
+		details := T("@1  ·  Teacher: @2  ·  @3 players inside", c.templateLabel(inst.TemplateName), string(teacher), players)
+		b.WriteString(fmt.Sprintf("label[1.65,%g;%s]", y+0.75, fmtEsc(mcColorize(muted, details))))
 		field := "visit_inst_" + inst.ID
 		switch role {
 		case portalStudent:
-			b.WriteString(fmt.Sprintf("label[0.7,%g;%s]", y+1.05, fmtEsc(mcColorize(success,
+			b.WriteString(fmt.Sprintf("label[1.65,%g;%s]", y+1.12, fmtEsc(mcColorize(success,
 				T("Your teacher is inside: you join as a student")))))
-			b.WriteString(styledBtn(9.35, y+0.3, 2.1, 0.7, field, T("Join"), colorPrimary))
+			b.WriteString(styledBtn(btnX, y+0.35, 2.3, 0.7, field, T("Join"), colorPrimary))
 			b.WriteString(tooltip(field, T("Enter as a student of your class")))
 		case portalStaff:
-			b.WriteString(fmt.Sprintf("label[0.7,%g;%s]", y+1.05, fmtEsc(mcColorize(success,
+			b.WriteString(fmt.Sprintf("label[1.65,%g;%s]", y+1.12, fmtEsc(mcColorize(success,
 				T("You enter with your usual role")))))
-			b.WriteString(styledBtn(9.35, y+0.3, 2.1, 0.7, field, T("Join"), colorPrimary))
+			b.WriteString(styledBtn(btnX, y+0.35, 2.3, 0.7, field, T("Join"), colorPrimary))
 		default:
 			text := T("Spectator: fly through blocks, no building")
 			if own {
 				text = T("Your teacher is not inside yet: you visit as a spectator")
 			}
-			b.WriteString(fmt.Sprintf("label[0.7,%g;%s]", y+1.05, fmtEsc(mcColorize(warning, text))))
-			b.WriteString(styledBtn(9.35, y+0.3, 2.1, 0.7, field, T("Visit"), colorButton))
+			b.WriteString(fmt.Sprintf("label[1.65,%g;%s]", y+1.12, fmtEsc(mcColorize(warning, text))))
+			b.WriteString(styledBtn(btnX, y+0.35, 2.3, 0.7, field, T("Visit"), colorButton))
 			b.WriteString(tooltip(field, T("Look around as a spectator: you can fly and pass through blocks but not build")))
 		}
 		y += cardH + gap
@@ -187,10 +190,10 @@ func (c *controller) showPortalWorlds(cc *proxy.ClientConn) {
 	}
 	b.WriteString("scroll_container_end[]")
 
-	b.WriteString(box(0.3, 8.7, 12, 1.0, colorCard))
-	b.WriteString(fmt.Sprintf("image[0.55,8.92;0.5,0.5;%s]", iconEnter))
-	b.WriteString(hint(1.25, 9.05, T("Spectators fly and pass through blocks but cannot build.")))
-	b.WriteString(hint(1.25, 9.45, T("Use the door in your hotbar to come back, the map to teleport.")))
+	b.WriteString(box(0.3, 9.1, w-0.6, 1.0, colorCard))
+	b.WriteString(fmt.Sprintf("image[0.55,9.32;0.5,0.5;%s]", iconEnter))
+	b.WriteString(hint(1.25, 9.45, T("Spectators fly and pass through blocks but cannot build.")))
+	b.WriteString(hint(1.25, 9.85, T("Use the door in your hotbar to come back, the map to teleport.")))
 
 	cc.ShowFormspec("classrooms:portal_worlds", b.String())
 }

@@ -470,7 +470,15 @@ func (c *controller) createClass(teacherName, className string) (bool, string) {
 			return false, msg
 		}
 	}
+	return c.insertClass(teacherName, className)
+}
 
+// insertClass creates a class owned by owner, without the institute limit
+// (administrators create classes for teachers with it).
+func (c *controller) insertClass(owner, className string) (bool, string) {
+	if className == "" || len(className) > 100 {
+		return false, T("Class name must be 1-100 characters.")
+	}
 	existing, err := c.getClassByName(className)
 	if err != nil {
 		return false, T("Database error.")
@@ -481,7 +489,7 @@ func (c *controller) createClass(teacherName, className string) (bool, string) {
 
 	_, err = c.db.Exec(
 		"INSERT INTO classes (name, created_by) VALUES (?, ?)",
-		className, teacherName)
+		className, owner)
 	if err != nil {
 		return false, T("Failed to create class.")
 	}
@@ -494,9 +502,7 @@ func (c *controller) deleteClass(teacherName string, classID int) (bool, string)
 		return false, T("Class not found.")
 	}
 
-	cc := proxy.Find(teacherName)
-	isAdmin := cc != nil && cc.HasPerms("server")
-	if cls.CreatedBy != teacherName && !isAdmin {
+	if cls.CreatedBy != teacherName && !c.isAdmin(teacherName) {
 		return false, T("You don't own this class.")
 	}
 
@@ -704,10 +710,12 @@ func (c *controller) getInstancesForClass(classID int) ([]instanceData, error) {
 }
 
 func (c *controller) getAllActiveInstances() ([]instanceData, error) {
-	return c.getFilteredActiveInstances("", "")
+	return c.getFilteredActiveInstances("", classFilterAll)
 }
 
-func (c *controller) getFilteredActiveInstances(institute, teacher string) ([]instanceData, error) {
+// getFilteredActiveInstances lists worlds by institute filter and class
+// filter (classFilterAll, classFilterNone or a class ID).
+func (c *controller) getFilteredActiveInstances(institute string, classID int) ([]instanceData, error) {
 	query := `SELECT id, class_id, created_by, institute, display_name, template_name, created_at,
 		server_id, uuid, node_id, proxy_name, backend_addr, status
 		FROM instances WHERE status != 'deleted'`
@@ -716,9 +724,12 @@ func (c *controller) getFilteredActiveInstances(institute, teacher string) ([]in
 		query += " AND institute = ?"
 		args = append(args, instituteFilterValue(institute))
 	}
-	if teacher != "" {
-		query += " AND created_by = ?"
-		args = append(args, teacher)
+	switch {
+	case classID == classFilterNone:
+		query += " AND class_id IS NULL"
+	case classID > 0:
+		query += " AND class_id = ?"
+		args = append(args, classID)
 	}
 	query += " ORDER BY created_at DESC"
 
@@ -1145,6 +1156,7 @@ func (c *controller) clearActiveInstance(player string) {
 	delete(c.runtime.adminTab, player)
 	delete(c.runtime.adminInstituteFilter, player)
 	delete(c.runtime.adminTeacherFilter, player)
+	delete(c.runtime.adminForms, player)
 	delete(c.runtime.adminUsers, player)
 	delete(c.runtime.passwordTarget, player)
 	delete(c.runtime.confirmDelete, player)

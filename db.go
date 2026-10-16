@@ -170,6 +170,12 @@ func migrateDB(db *sql.DB) error {
 			FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
+		`CREATE TABLE IF NOT EXISTS panel_admins (
+			username   VARCHAR(50) PRIMARY KEY,
+			granted_by VARCHAR(50) NOT NULL,
+			granted_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
 		`CREATE TABLE IF NOT EXISTS account_creators (
 			username   VARCHAR(50) PRIMARY KEY,
 			created_by VARCHAR(50) NOT NULL,
