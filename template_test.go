@@ -30,7 +30,7 @@ func TestValidateTemplateEggLimits(t *testing.T) {
 }
 
 func TestTemplateIcons(t *testing.T) {
-	for _, name := range []string{"italy", "spain", "hungary", "germany", "poland", "flat", "generic", "moon", "mars"} {
+	for _, name := range []string{"italy", "spain", "hungary", "germany", "poland", "flat", "generic", "moon", "mars", "europe"} {
 		icon, ok := templateIcons[name]
 		if !ok || !strings.HasPrefix(icon, "[png:") {
 			t.Errorf("icon %q missing", name)

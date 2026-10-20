@@ -6,6 +6,9 @@ pixels sharp. The plugin embeds the files and sends them inline as
 "[png:<base64>" textures, so they need no media on the servers.
 
   python3 tools/make_icons.py          (needs Pillow)
+  python3 tools/make_icons.py --europe DIR
+      also redraws europe.png from the prepare.py output of the Europe map
+      (luanti-tools/countrygen; needs numpy); without it europe.png is kept
 """
 
 import math
@@ -326,8 +329,39 @@ def tool_settings():
     save(img, "tool_settings")
 
 
+def europe_icon(data_dir):
+    """Europe as seen on its map: land, sea and ice from countrygen's rasters."""
+    import json
+
+    import numpy as np
+    meta = json.load(open(os.path.join(data_dir, "meta.json")))
+    mat = np.fromfile(os.path.join(data_dir, "mat.bin"), np.uint8).reshape(meta["height"], meta["width"])
+    names = meta["materials"]
+    water = np.isin(mat, [names.index(n) for n in ("sea", "lake", "river")])
+    snow = mat == names.index("snow")
+    img, d = canvas()
+    x0, y0, x1, y1 = 1, 4, 30, 27          # map area, inclusive
+    w, h = x1 - x0 + 1, y1 - y0 + 1
+    H, W = mat.shape
+    sea, land, ice = (52, 98, 182), (96, 160, 70), (236, 240, 246)
+    for j in range(h):
+        for i in range(w):
+            r0, r1 = j * H // h, (j + 1) * H // h
+            c0, c1 = i * W // w, (i + 1) * W // w
+            lf = 1 - water[r0:r1, c0:c1].mean()
+            col = sea
+            if lf > 0.45:
+                col = ice if snow[r0:r1, c0:c1].mean() > 0.4 else land
+            img.putpixel((x0 + i, y0 + j), col + (255,))
+    d.rectangle([x0 - 1, y0 - 1, x1 + 1, y1 + 1], outline=OUTLINE)
+    save(img, "europe")
+
+
 def main():
+    import sys
     os.makedirs(OUT, exist_ok=True)
+    if "--europe" in sys.argv:
+        europe_icon(sys.argv[sys.argv.index("--europe") + 1])
     tool_zones()
     tool_map()
     tool_time()
