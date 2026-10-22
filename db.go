@@ -260,6 +260,15 @@ func migrateDB(db *sql.DB) error {
 			ADD CONSTRAINT fk_zone_missions_group FOREIGN KEY (group_id) REFERENCES class_groups(id) ON DELETE SET NULL`); err != nil {
 		return err
 	}
+	// Special missions: an activity of the bridge (kind) and its settings.
+	if err := addColumnIfMissing(db, "zone_missions", "kind",
+		"ALTER TABLE zone_missions ADD COLUMN kind VARCHAR(40) NOT NULL DEFAULT '' AFTER tools"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(db, "zone_missions", "settings",
+		"ALTER TABLE zone_missions ADD COLUMN settings TEXT NULL AFTER kind"); err != nil {
+		return err
+	}
 	var zoneNullable string
 	if err := db.QueryRow(`SELECT IS_NULLABLE FROM information_schema.COLUMNS
 		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'zone_missions' AND COLUMN_NAME = 'zone_id'`).Scan(&zoneNullable); err != nil {

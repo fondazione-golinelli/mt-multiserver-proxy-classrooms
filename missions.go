@@ -86,6 +86,8 @@ type missionData struct {
 	Description string
 	Goals       []missionGoal
 	Tools       []missionTool
+	Kind        string         // special mission activity; "" for a normal mission
+	Settings    map[string]int // the activity's settings
 	CompletedAt sql.NullTime
 }
 
@@ -95,6 +97,9 @@ type catalogEntry struct {
 	Key   string `json:"key"`
 	Label string `json:"label"`
 	Icon  string `json:"icon,omitempty"` // item name shown as the entry's picture
+	// Special mission tools only: handed out while settings[Setting] >= Min.
+	Setting string `json:"setting,omitempty"`
+	Min     int    `json:"min,omitempty"`
 }
 
 // missionCatalog is what the bridge reports for one world.
@@ -115,12 +120,14 @@ type missionDraft struct {
 	Description string
 	Goals       []missionGoal
 	Tools       []missionTool
-	Mode        string // "goals" or "tools"
-	TypeIndex   int    // 1-based index in missionGoalTypes
-	Target      string // selected catalog key
-	Count       int    // amount for the next goal
-	ToolAmount  int    // amount added per tool click
-	EditingID   int    // mission being edited; 0 when creating a new one
+	Kind        string         // special mission activity; "" for a normal mission
+	Settings    map[string]int // the activity's settings
+	Mode        string         // "goals", "tools" or "special"
+	TypeIndex   int            // 1-based index in missionGoalTypes
+	Target      string         // selected catalog key
+	Count       int            // amount for the next goal
+	ToolAmount  int            // amount added per tool click
+	EditingID   int            // mission being edited; 0 when creating a new one
 }
 
 func (d *missionDraft) global() bool { return d.ZoneID == 0 }
@@ -141,6 +148,11 @@ func draftFromMission(m *missionData) *missionDraft {
 	d.GroupID, d.EditingID, d.Title, d.Description = m.GroupID, m.ID, m.Title, m.Description
 	d.Goals = append([]missionGoal(nil), m.Goals...)
 	d.Tools = append([]missionTool(nil), m.Tools...)
+	d.Kind = m.Kind
+	d.Settings = map[string]int{}
+	for k, v := range m.Settings {
+		d.Settings[k] = v
+	}
 	return d
 }
 
@@ -156,7 +168,8 @@ func needsChest(goals []missionGoal, global bool) bool {
 }
 
 const missionSelect = `SELECT m.id, COALESCE(m.zone_id, 0), COALESCE(m.instance_id, z.instance_id, ''),
-	COALESCE(m.group_id, 0), m.title, m.description, m.objectives, m.tools, m.completed_at
+	COALESCE(m.group_id, 0), m.title, m.description, m.objectives, m.tools, m.kind,
+	COALESCE(m.settings, ''), m.completed_at
 	FROM zone_missions m LEFT JOIN instance_zones z ON z.id = m.zone_id `
 
 func (c *controller) queryMissions(where string, args ...any) ([]missionData, error) {
@@ -168,13 +181,14 @@ func (c *controller) queryMissions(where string, args ...any) ([]missionData, er
 	var out []missionData
 	for rows.Next() {
 		var m missionData
-		var goals, tools string
+		var goals, tools, settings string
 		if err := rows.Scan(&m.ID, &m.ZoneID, &m.InstanceID, &m.GroupID, &m.Title, &m.Description,
-			&goals, &tools, &m.CompletedAt); err != nil {
+			&goals, &tools, &m.Kind, &settings, &m.CompletedAt); err != nil {
 			return nil, err
 		}
 		_ = json.Unmarshal([]byte(goals), &m.Goals)
 		_ = json.Unmarshal([]byte(tools), &m.Tools)
+		_ = json.Unmarshal([]byte(settings), &m.Settings)
 		out = append(out, m)
 	}
 	return out, rows.Err()
@@ -231,6 +245,15 @@ func (c *controller) createMission(inst *instanceData, d *missionDraft) (bool, s
 	if len(d.Goals) == 0 {
 		return false, T("Add at least one goal."), 0
 	}
+	if d.Kind != "" {
+		k := findSpecial(c.getSpecials(inst.ID), d.Kind)
+		if k == nil {
+			return false, T("This special mission is not available in this world."), 0
+		}
+		if k.ZoneOnly && d.global() {
+			return false, T("@1 needs a zone: create the mission from a zone.", k.Label), 0
+		}
+	}
 	if d.global() {
 		list, err := c.getWorldMissionList(inst.ID)
 		if err != nil {
@@ -256,9 +279,14 @@ func (c *controller) createMission(inst *instanceData, d *missionDraft) (bool, s
 	}
 	goals, _ := json.Marshal(d.Goals)
 	tools, _ := json.Marshal(d.Tools)
-	res, err := c.db.Exec(`INSERT INTO zone_missions (zone_id, instance_id, group_id, title, description, objectives, tools)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`, nullableID(d.ZoneID), inst.ID, nullableID(d.GroupID), title,
-		cleanShortName(d.Description, 120), string(goals), string(tools))
+	var settings any
+	if d.Kind != "" {
+		raw, _ := json.Marshal(d.Settings)
+		settings = string(raw)
+	}
+	res, err := c.db.Exec(`INSERT INTO zone_missions (zone_id, instance_id, group_id, title, description, objectives, tools, kind, settings)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, nullableID(d.ZoneID), inst.ID, nullableID(d.GroupID), title,
+		cleanShortName(d.Description, 120), string(goals), string(tools), d.Kind, settings)
 	if err != nil {
 		return false, T("Could not save the mission."), 0
 	}
@@ -269,6 +297,8 @@ func (c *controller) createMission(inst *instanceData, d *missionDraft) (bool, s
 
 // updateMission saves edited goals and tools of a mission still in progress.
 // The mission keeps its ID, so tools already handed out and progress stay.
+// A special mission keeps its activity and settings: the activity was set up
+// in the world when the mission started.
 func (c *controller) updateMission(inst *instanceData, d *missionDraft) (bool, string) {
 	title := cleanShortName(d.Title, 40)
 	if title == "" {
@@ -370,6 +400,14 @@ func missionPayload(m *missionData, participants []string, color string) map[str
 	if m.global() {
 		out["global"] = true
 	}
+	if m.Kind != "" {
+		settings := m.Settings
+		if settings == nil {
+			settings = map[string]int{}
+		}
+		out["kind"] = m.Kind
+		out["settings"] = settings
+	}
 	return out
 }
 
@@ -420,8 +458,10 @@ func (c *controller) handleMissionCatalog(cc *proxy.ClientConn, data map[string]
 	if err := json.Unmarshal(raw, &cat); err != nil {
 		return
 	}
+	specials := parseSpecials(data["special"])
 	c.mu.Lock()
 	c.runtime.missionCatalogs[inst.ID] = cat
+	c.runtime.missionSpecials[inst.ID] = specials
 	draft := c.runtime.missionDrafts[cc.Name()]
 	c.mu.Unlock()
 	if draft != nil {
@@ -496,6 +536,8 @@ func goalTextFor(g missionGoal, global bool) string {
 			return T("@1 × @2 blocks near the chest", g.Count, g.Label)
 		}
 		return T("@1 × @2 blocks in the zone", g.Count, g.Label)
+	case goalSpecial:
+		return T("@1: @2", g.Label, g.Count)
 	}
 	return g.Label
 }

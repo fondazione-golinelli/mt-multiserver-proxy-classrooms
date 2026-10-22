@@ -6,6 +6,7 @@ import (
 	crand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -325,6 +326,20 @@ func (c *controller) waitForDaemonState(ctx context.Context, node nodeEndpoint, 
 
 // ── HTTP helpers ───────────────────────────────────────────────────────────
 
+// httpStatusError is a non-2xx answer from the Panel or Wings API.
+type httpStatusError struct {
+	Code int
+	msg  string
+}
+
+func (e *httpStatusError) Error() string { return e.msg }
+
+// isHTTPStatus reports whether err is an API answer with the given status.
+func isHTTPStatus(err error, code int) bool {
+	var se *httpStatusError
+	return errors.As(err, &se) && se.Code == code
+}
+
 func (c *controller) panelRequest(ctx context.Context, method, path string, body any, out any) error {
 	return c.doJSONRequest(ctx, c.cfg.PanelURL+path, c.cfg.ApplicationToken, method, body, out)
 }
@@ -365,7 +380,8 @@ func (c *controller) doJSONRequest(ctx context.Context, url, token, method strin
 		if trimmed == "" {
 			trimmed = resp.Status
 		}
-		return fmt.Errorf("%s %s returned %s: %s", method, url, resp.Status, trimmed)
+		return &httpStatusError{Code: resp.StatusCode,
+			msg: fmt.Sprintf("%s %s returned %s: %s", method, url, resp.Status, trimmed)}
 	}
 
 	if out == nil {

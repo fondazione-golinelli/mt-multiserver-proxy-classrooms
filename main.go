@@ -150,6 +150,7 @@ type runtimeState struct {
 	worldToolsGroup      map[string]int              // teacher -> selected group index for zone teleports
 	studentLists         map[string]*studentListView // teacher -> group editor search/filter/selection
 	missionCatalogs      map[string]missionCatalog   // instance ID -> catalog reported by the bridge
+	missionSpecials      map[string][]specialKind    // instance ID -> special missions the bridge offers
 	missionProgress      map[int]missionProgress     // mission ID -> last progress report
 	missionDrafts        map[string]*missionDraft    // teacher -> mission being composed
 	missionView          map[string]int              // teacher -> mission shown in the editor (0 = new)
@@ -181,6 +182,7 @@ func newRuntimeState() runtimeState {
 		worldToolsGroup:      make(map[string]int),
 		studentLists:         make(map[string]*studentListView),
 		missionCatalogs:      make(map[string]missionCatalog),
+		missionSpecials:      make(map[string][]specialKind),
 		missionProgress:      make(map[int]missionProgress),
 		missionDrafts:        make(map[string]*missionDraft),
 		missionView:          make(map[string]int),

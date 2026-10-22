@@ -241,6 +241,8 @@ func (c *controller) showMissionEditor(cc *proxy.ClientConn) {
 	}
 	global := draft.global()
 	catalog, _ := c.getCatalog(inst.ID)
+	specials := c.getSpecials(inst.ID)
+	special := findSpecial(specials, draft.Kind)
 
 	const w, h = 14.2, 11.2
 	var b strings.Builder
@@ -248,6 +250,9 @@ func (c *controller) showMissionEditor(cc *proxy.ClientConn) {
 	heading := T("New mission · @1", place)
 	if editing {
 		heading = T("Edit mission · @1", place)
+	}
+	if special != nil {
+		audience += "   ★ " + special.Label
 	}
 	fsHeader(&b, w, heading, T("Played by: @1", audience), true, true)
 
@@ -263,9 +268,12 @@ func (c *controller) showMissionEditor(cc *proxy.ClientConn) {
 		{"ms_mode_goals", T("1 · Goals")},
 		{"ms_mode_tools", T("2 · Tools for students")},
 	})
-	if draft.Mode == "tools" {
+	switch draft.Mode {
+	case "special":
+		c.writeSpecialPicker(&b, inst, draft, specials, editing)
+	case "tools":
 		c.writeToolPicker(&b, draft, catalog["tools"], global)
-	} else {
+	default:
 		c.writeGoalBuilder(&b, draft, catalog, global)
 	}
 
@@ -282,36 +290,65 @@ func (c *controller) showMissionEditor(cc *proxy.ClientConn) {
 		// Only the item name is cut: the sentence around it is translated by
 		// the client and cannot be measured here.
 		short := g
-		if r := []rune(g.Label); len(r) > 12 {
+		if r := []rune(g.Label); len(r) > 12 && g.Type != goalSpecial {
 			short.Label = string(append(r[:11], '…'))
 		}
 		b.WriteString(fmt.Sprintf("label[10.08,%g;%s]", gy+0.31, fmtEsc(goalTextFor(short, global))))
-		b.WriteString(iconBtn(13.33, gy+0.13, 0.36, fmt.Sprintf("ms_rm_%d", i), iconClose, T("Remove: @1", goalTextFor(g, global))))
+		if g.Type == goalSpecial {
+			// Set by the activity: changed through its settings.
+			b.WriteString(fmt.Sprintf("tooltip[9.4,%g;4.35,0.62;%s]", gy, fmtEsc(T("Goal of the special mission: change it in its settings"))))
+		} else {
+			b.WriteString(iconBtn(13.33, gy+0.13, 0.36, fmt.Sprintf("ms_rm_%d", i), iconClose, T("Remove: @1", goalTextFor(g, global))))
+		}
 		gy += 0.68
 	}
 	b.WriteString(sectionTitle(9.45, 7.75, T("TOOLS FOR EACH STUDENT")))
-	if len(draft.Tools) == 0 {
+	var autoTools []catalogEntry
+	if special != nil {
+		autoTools = special.activeTools(draft.Settings)
+	}
+	if len(draft.Tools) == 0 && len(autoTools) == 0 {
 		b.WriteString(hint(9.5, 8.15, T("None (optional).")))
 	}
-	for i, t := range draft.Tools {
+	for i, t := range autoTools {
+		col, row := i%2, i/2
+		x, y := 9.4+float64(col)*2.2, 7.95+float64(row)*0.5
+		b.WriteString(box(x, y, 2.12, 0.44, colorRow))
+		c.smallIcon(&b, x+0.04, y+0.02, 0.4, t.Icon)
+		b.WriteString(coloredLbl(x+0.5, y+0.22, warning, "★"))
+		b.WriteString(fmt.Sprintf("tooltip[%g,%g;2.12,0.44;%s]", x, y, fmtEsc(T("@1: given automatically in the zone, taken back when leaving it", t.Label))))
+	}
+	for j, t := range draft.Tools {
+		i := j + len(autoTools)
 		col, row := i%2, i/2
 		x, y := 9.4+float64(col)*2.2, 7.95+float64(row)*0.5
 		b.WriteString(box(x, y, 2.12, 0.44, colorRow))
 		c.smallIcon(&b, x+0.04, y+0.02, 0.4, t.Icon)
 		b.WriteString(fmt.Sprintf("label[%g,%g;%s]", x+0.5, y+0.22, fmtEsc(fmt.Sprintf("×%d", t.Count))))
-		b.WriteString(iconBtn(x+1.72, y+0.06, 0.32, fmt.Sprintf("ms_tool_rm_%d", i), iconClose, T("Remove @1", t.Label)))
+		b.WriteString(iconBtn(x+1.72, y+0.06, 0.32, fmt.Sprintf("ms_tool_rm_%d", j), iconClose, T("Remove @1", t.Label)))
 	}
 
-	// Footer.
+	// Footer: special missions on the left, then a hint, then the buttons.
+	specialColor := colorButton
+	if draft.Mode == "special" {
+		specialColor = colorTabFocus
+	} else if special != nil {
+		specialColor = colorPrimary
+	}
+	b.WriteString(styledBtn(0.3, 10.2, 3.4, 0.8, "ms_mode_special", T("★ Special missions"), specialColor))
+	b.WriteString(tooltip("ms_mode_special", T("Activities with their own rules, set up for you in the world")))
+	footerHint := ""
 	if editing {
-		b.WriteString(hint(0.35, 10.6, T("Progress and tools already given are kept.")))
+		footerHint = T("Progress and tools already given are kept.")
 	} else if needsChest(draft.Goals, global) {
-		b.WriteString(fmt.Sprintf("image[0.35,10.38;0.42,0.42;%s]", iconWarning))
-		chestHint := T("After starting you get the delivery chest: place it inside the zone.")
+		b.WriteString(fmt.Sprintf("image[3.9,10.38;0.42,0.42;%s]", iconWarning))
+		footerHint = T("After starting you get the delivery chest: place it inside the zone.")
 		if global {
-			chestHint = T("After starting you get the delivery chest: place it anywhere.")
+			footerHint = T("After starting you get the delivery chest: place it anywhere.")
 		}
-		b.WriteString(hint(0.9, 10.6, chestHint))
+	}
+	if footerHint != "" {
+		b.WriteString(fmt.Sprintf("textarea[4.35,10.15;3.8,0.95;;;%s]", fmtEsc(mcColorize(muted, footerHint))))
 	}
 	if editing {
 		b.WriteString(btn(8.25, 10.2, 2.4, 0.8, "ms_cancel_edit", T("Cancel")))
@@ -404,13 +441,116 @@ func (c *controller) writeToolPicker(b *strings.Builder, draft *missionDraft, to
 	b.WriteString("scroll_container_end[]")
 }
 
+// writeSpecialPicker lists the special missions of this world and the
+// settings of the chosen one.
+func (c *controller) writeSpecialPicker(b *strings.Builder, inst *instanceData, draft *missionDraft, kinds []specialKind, editing bool) {
+	b.WriteString(sectionTitle(0.55, 4.05, T("SPECIAL MISSIONS")))
+	b.WriteString(hint(0.55, 4.45, T("Activities with their own rules, set up for you in the world.")))
+	if len(kinds) == 0 {
+		b.WriteString(hint(0.55, 5.0, T("No special missions are available in this world.")))
+		return
+	}
+	special := findSpecial(kinds, draft.Kind)
+	y := 5.0
+	if editing {
+		// The activity was set up when the mission started.
+		if special == nil {
+			b.WriteString(hint(0.55, 5.0, T("This is a normal mission: it cannot become a special one.")))
+			return
+		}
+	} else {
+		const top, step = 4.75, 0.95
+		height := float64(min(len(kinds), 2))*step + 0.05
+		y = top + height + 0.3
+		b.WriteString(scrollbarFor("scr_ms_special", 8.75, top, height, len(kinds), step, 0.05))
+		b.WriteString(fmt.Sprintf("scroll_container[0.5,%g;8.2,%g;scr_ms_special;vertical;0.1]", top, height))
+		for i, k := range kinds {
+			y := 0.05 + float64(i)*step
+			selected := k.Key == draft.Kind
+			color := colorRow
+			if selected {
+				color = colorButton
+			}
+			b.WriteString(box(0, y, 8.15, 0.85, color))
+			if selected {
+				b.WriteString(box(0, y, 0.1, 0.85, colorTabFocus))
+			}
+			c.smallIcon(b, 0.2, y+0.1, 0.65, k.Icon)
+			b.WriteString(coloredLbl(1.0, y+0.25, light, k.Label))
+			b.WriteString(fmt.Sprintf("label[1.0,%g;%s]", y+0.6, fmtEsc(mcColorize(muted, k.Description))))
+			b.WriteString(fmt.Sprintf("tooltip[0,%g;6.3,0.85;%s]", y, fmtEsc(k.Description)))
+			if selected {
+				b.WriteString(btn(6.4, y+0.15, 1.65, 0.55, "ms_special_none", T("Remove")))
+				b.WriteString(tooltip("ms_special_none", T("Back to a normal mission")))
+			} else {
+				b.WriteString(styledBtn(6.4, y+0.15, 1.65, 0.55, "ms_special_"+k.Key, T("Choose"), colorPrimary))
+			}
+		}
+		b.WriteString("scroll_container_end[]")
+	}
+	if special == nil {
+		b.WriteString(hint(0.55, y, T("Choose an activity: its goals and tools are added for you.")))
+		return
+	}
+
+	b.WriteString(sectionTitle(0.55, y, T("SETTINGS · @1", special.Label)))
+	y += 0.3
+	for _, s := range special.Settings {
+		v := s.clamp(draft.Settings[s.Key])
+		b.WriteString(box(0.5, y, 8.35, 0.62, colorRow))
+		b.WriteString(fmt.Sprintf("label[0.7,%g;%s]", y+0.31, fmtEsc(s.Label)))
+		switch {
+		case editing:
+			text := fmt.Sprint(v)
+			if s.Type == "choice" {
+				text = s.Options[v-1]
+			}
+			b.WriteString(coloredLbl(5.0, y+0.31, warning, text))
+		case s.Type == "choice":
+			b.WriteString(fmt.Sprintf("dropdown[5.0,%g;3.75,0.5;ms_setc_%s;%s;%d;true]", y+0.06, s.Key, dropdownItems(s.Options), v))
+		default:
+			b.WriteString(btn(5.0, y+0.06, 0.7, 0.5, "ms_setm_"+s.Key, "−"))
+			b.WriteString(fmt.Sprintf("field[5.75,%g;1.2,0.5;ms_setv_%s;;%d]", y+0.06, s.Key, v))
+			b.WriteString(fmt.Sprintf("field_close_on_enter[ms_setv_%s;false]", s.Key))
+			b.WriteString(btn(7.0, y+0.06, 0.7, 0.5, "ms_setp_"+s.Key, "+"))
+			b.WriteString(hint(7.85, y+0.31, fmt.Sprintf("%d–%d", s.Min, s.Max)))
+		}
+		y += 0.7
+	}
+	if editing {
+		b.WriteString(hint(0.55, y+0.3, T("Settings are fixed: the activity was set up when the mission started.")))
+		return
+	}
+	// Digging activities need a zone where the students may build.
+	if special.Dig && !draft.global() {
+		if z := c.zoneByID(inst, draft.ZoneID); z != nil && !z.Open && !z.GroupID.Valid {
+			b.WriteString(fmt.Sprintf("image[0.55,%g;0.42,0.42;%s]", y+0.1, iconWarning))
+			b.WriteString(fmt.Sprintf("textarea[1.05,%g;7.8,0.95;;;%s]", y, fmtEsc(mcColorize(warning,
+				T("Students cannot dig in a teachers-only zone: open this zone to the class or to a group.")))))
+		}
+	}
+}
+
 func (c *controller) writeMissionStatus(b *strings.Builder, cc *proxy.ClientConn, m *missionData) {
 	p, hasProgress := c.getMissionProgress(m.ID)
 	complete := c.missionComplete(m)
 	global := m.global()
 
+	var special *specialKind
+	if m.Kind != "" {
+		if inst := c.currentManagedWorld(cc); inst != nil {
+			special = findSpecial(c.getSpecials(inst.ID), m.Kind)
+		}
+	}
 	b.WriteString(box(0.3, 1.3, 11.4, 1.6, colorCard))
 	b.WriteString(coloredLbl(0.55, 1.65, light, m.Title))
+	if m.Kind != "" {
+		label := T("Special mission")
+		if special != nil {
+			label = special.Label
+		}
+		b.WriteString(fmt.Sprintf("label[7.4,1.65;%s]", fmtEsc(mcColorize(warning, "★ ")+mcColorize(warning, label))))
+	}
 	if m.Description != "" {
 		b.WriteString(hint(0.55, 2.05, m.Description))
 	}
@@ -459,10 +599,22 @@ func (c *controller) writeMissionStatus(b *strings.Builder, cc *proxy.ClientConn
 			T("Every student gets the support tools again the next time they are in this world")
 	}
 	b.WriteString(sectionTitle(0.55, 7.6, toolsTitle))
-	if len(m.Tools) == 0 {
+	var autoTools []catalogEntry
+	if special != nil {
+		autoTools = special.activeTools(m.Settings)
+	}
+	if len(m.Tools) == 0 && len(autoTools) == 0 {
 		b.WriteString(hint(0.55, 8.0, T("None.")))
 	}
-	for i, t := range m.Tools {
+	for i, t := range autoTools {
+		x := 0.5 + float64(i)*1.4
+		b.WriteString(box(x, 7.85, 1.32, 0.5, colorRow))
+		c.smallIcon(b, x+0.05, 7.88, 0.44, t.Icon)
+		b.WriteString(coloredLbl(x+0.58, 8.1, warning, "★"))
+		b.WriteString(fmt.Sprintf("tooltip[%g,7.85;1.32,0.5;%s]", x, fmtEsc(T("@1: given automatically in the zone, taken back when leaving it", t.Label))))
+	}
+	for j, t := range m.Tools {
+		i := j + len(autoTools)
 		x := 0.5 + float64(i)*1.4
 		b.WriteString(box(x, 7.85, 1.32, 0.5, colorRow))
 		c.smallIcon(b, x+0.05, 7.88, 0.44, t.Icon)
@@ -570,6 +722,7 @@ func (c *controller) handleMissionEditor(cc *proxy.ClientConn, fields []mt.Field
 	}
 
 	catalog, _ := c.getCatalog(inst.ID)
+	specials := c.getSpecials(inst.ID)
 
 	c.mu.Lock()
 	if v, ok := fm["ms_title"]; ok {
@@ -581,6 +734,27 @@ func (c *controller) handleMissionEditor(cc *proxy.ClientConn, fields []mt.Field
 	if v, ok := fm["ms_count"]; ok {
 		draft.Count = parseAmount(v, draft.Count, maxGoalCount)
 	}
+	// Settings of the special mission: fixed once it started.
+	special := findSpecial(specials, draft.Kind)
+	if special != nil && draft.EditingID == 0 {
+		for _, st := range special.Settings {
+			v, ok := fm["ms_setv_"+st.Key]
+			if st.Type == "choice" {
+				v, ok = fm["ms_setc_"+st.Key]
+			}
+			if n, err := strconv.Atoi(strings.TrimSpace(v)); ok && err == nil {
+				draft.Settings[st.Key] = st.clamp(n)
+			}
+			step := 0
+			if has("ms_setm_" + st.Key) {
+				step = -1
+			} else if has("ms_setp_" + st.Key) {
+				step = 1
+			}
+			draft.Settings[st.Key] = st.clamp(draft.Settings[st.Key] + step)
+		}
+		draft.syncSpecialGoals(special)
+	}
 	c.mu.Unlock()
 
 	var message string
@@ -591,6 +765,21 @@ func (c *controller) handleMissionEditor(cc *proxy.ClientConn, fields []mt.Field
 			draft.Mode = "goals"
 		case k == "ms_mode_tools":
 			draft.Mode = "tools"
+		case k == "ms_mode_special":
+			draft.Mode = "special"
+		case k == "ms_special_none" && draft.EditingID == 0:
+			draft.setSpecial(nil)
+		case strings.HasPrefix(k, "ms_special_") && draft.EditingID == 0:
+			if sk := findSpecial(specials, strings.TrimPrefix(k, "ms_special_")); sk != nil {
+				if sk.ZoneOnly && draft.global() {
+					message = T("@1 needs a zone: create the mission from a zone.", sk.Label)
+					break
+				}
+				draft.setSpecial(sk)
+				if draft.Title == "" {
+					draft.Title = sk.Label
+				}
+			}
 		case strings.HasPrefix(k, "ms_type_"):
 			if i, err := strconv.Atoi(strings.TrimPrefix(k, "ms_type_")); err == nil && i != draft.TypeIndex {
 				draft.TypeIndex, draft.Target = i, ""
@@ -610,6 +799,10 @@ func (c *controller) handleMissionEditor(cc *proxy.ClientConn, fields []mt.Field
 			}
 		case strings.HasPrefix(k, "ms_tool_"):
 			if e := findEntry(catalog["tools"], strings.TrimPrefix(k, "ms_tool_")); e != nil {
+				if limit := maxTeacherTools(findSpecial(specials, draft.Kind)); len(draft.Tools) >= limit && findTool(draft.Tools, e.Key) == nil {
+					message = T("At most @1 kinds of tools.", limit)
+					break
+				}
 				var ok bool
 				draft.Tools, ok = addTool(draft.Tools, missionTool{Key: e.Key, Label: e.Label, Icon: e.Icon,
 					Count: max(draft.ToolAmount, 1)}, maxToolCount)
@@ -618,7 +811,8 @@ func (c *controller) handleMissionEditor(cc *proxy.ClientConn, fields []mt.Field
 				}
 			}
 		case strings.HasPrefix(k, "ms_rm_"):
-			if i, err := strconv.Atoi(strings.TrimPrefix(k, "ms_rm_")); err == nil && i >= 0 && i < len(draft.Goals) {
+			if i, err := strconv.Atoi(strings.TrimPrefix(k, "ms_rm_")); err == nil && i >= 0 && i < len(draft.Goals) &&
+				draft.Goals[i].Type != goalSpecial {
 				draft.Goals = append(draft.Goals[:i], draft.Goals[i+1:]...)
 			}
 		case k == "ms_add":

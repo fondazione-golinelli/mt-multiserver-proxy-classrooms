@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -276,9 +277,14 @@ func (c *controller) deleteInstance(inst *instanceData) error {
 		proxy.RmServer(inst.ProxyName)
 	}
 
-	// 2. Delete from Pelican
+	// 2. Delete from Pelican. Keep the row on failure, or the server would
+	// live on in Pelican without showing in any panel.
 	if err := c.deleteServer(ctx, inst.ServerID); err != nil {
-		log.Printf("[%s] warning: failed to delete Pelican server %d: %v", pluginName, inst.ServerID, err)
+		if !isHTTPStatus(err, http.StatusNotFound) {
+			log.Printf("[%s] failed to delete Pelican server %d: %v", pluginName, inst.ServerID, err)
+			return err
+		}
+		log.Printf("[%s] Pelican server %d was already gone", pluginName, inst.ServerID)
 	}
 
 	// 3. Mark as deleted in DB
