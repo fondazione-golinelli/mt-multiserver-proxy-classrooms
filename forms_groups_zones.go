@@ -528,10 +528,10 @@ func (c *controller) showWorldTools(cc *proxy.ClientConn) {
 	}
 
 	var b strings.Builder
-	fsOpen(&b, 11, 11.85)
-	fsHeader(&b, 11, T("Zones & missions"), inst.Title(), true, true)
+	fsOpen(&b, 14.5, 11.85)
+	fsHeader(&b, 14.5, T("Zones & missions"), inst.Title(), true, true)
 	if inst.ClassID != nil {
-		b.WriteString(styledBtn(7.4, 0.2, 2.55, 0.6, "wt_groups", T("Edit groups"), colorButton))
+		b.WriteString(styledBtn(10.6, 0.2, 2.85, 0.6, "wt_groups", T("Edit groups"), colorButton))
 		b.WriteString(tooltip("wt_groups", T("Create groups and choose who is in each one")))
 	}
 	tabBar(&b, 0.3, 1.3, 3.0, "wt_tab_"+tab, [][2]string{
@@ -545,24 +545,24 @@ func (c *controller) showWorldTools(cc *proxy.ClientConn) {
 	}
 
 	// New zone.
-	b.WriteString(box(0.3, 2.1, 10.4, 2.2, colorCard))
+	b.WriteString(box(0.3, 2.1, 13.9, 2.2, colorCard))
 	b.WriteString(sectionTitle(0.55, 2.4, T("NEW ZONE")))
 	b.WriteString(hint(2.6, 2.4, T("Protect an area or mark a meeting point")))
-	b.WriteString("field[0.55,3.0;4.1,0.6;wt_name;" + fmtEsc(T("Name")) + ";]")
+	b.WriteString("field[0.55,3.0;5.6,0.6;wt_name;" + fmtEsc(T("Name")) + ";]")
 	b.WriteString("field_close_on_enter[wt_name;false]")
 	options := zoneAccessOptions(groups)
-	b.WriteString(hint(4.85, 2.8, T("Who can build inside")))
-	b.WriteString(fmt.Sprintf("dropdown[4.85,3.0;3.2,0.6;wt_type;%s;1;true]", dropdownItems(options)))
+	b.WriteString(hint(6.35, 2.8, T("Who can build inside")))
+	b.WriteString(fmt.Sprintf("dropdown[6.35,3.0;4.2,0.6;wt_type;%s;1;true]", dropdownItems(options)))
 	b.WriteString(fmt.Sprintf("style[wt_create;bgcolor=%s]", colorPrimary))
-	b.WriteString("button_exit[8.25,3.0;2.25,0.6;wt_create;" + fmtEsc(T("Create zone")) + "]")
+	b.WriteString("button_exit[10.75,3.0;3.25,0.6;wt_create;" + fmtEsc(T("Create zone")) + "]")
 	b.WriteString(tooltip("wt_create", T("Fly through blocks and mark the corners in the world")))
 	b.WriteString(hint(0.55, 3.95, T("You'll fly through blocks and mark two corners and a teleport point.")))
 
 	// Zones.
-	b.WriteString(box(0.3, 4.5, 10.4, 7.05, colorCard))
+	b.WriteString(box(0.3, 4.5, 13.9, 7.05, colorCard))
 	b.WriteString(sectionTitle(0.55, 4.8, T("ZONES IN THIS WORLD (@1)", len(zones))))
 	if len(zones) > 0 {
-		b.WriteString(styledBtn(7.6, 4.6, 2.9, 0.5, "wt_show", T("Show in the world"), colorButton))
+		b.WriteString(styledBtn(10.85, 4.6, 3.15, 0.5, "wt_show", T("Show in the world"), colorButton))
 		b.WriteString(tooltip("wt_show", T("Draws the zone borders around you for a few seconds")))
 	}
 	listTop := 5.3
@@ -578,16 +578,16 @@ func (c *controller) showWorldTools(cc *proxy.ClientConn) {
 			names[i] = g.Name
 		}
 		b.WriteString(hint(0.55, 5.52, T("Teleport group:")))
-		b.WriteString(fmt.Sprintf("dropdown[2.85,5.25;3.4,0.55;wt_group;%s;%d;true]", dropdownItems(names), selected))
+		b.WriteString(fmt.Sprintf("dropdown[3.25,5.25;4.4,0.55;wt_group;%s;%d;true]", dropdownItems(names), selected))
 		listTop = 6.0
 	}
 	if len(zones) == 0 {
 		b.WriteString(hint(0.6, 5.5, T("No zones yet: everyone can build everywhere.")))
 	}
 	listH := 11.4 - listTop
-	b.WriteString(scrollbarFor("scr_wt_zones", 10.35, listTop, listH, len(zones), 1.35, 0.05))
+	b.WriteString(scrollbarFor("scr_wt_zones", 13.85, listTop, listH, len(zones), 1.35, 0.05))
 	missionsByZone, _ := c.getMissionsForWorld(inst.ID)
-	b.WriteString(fmt.Sprintf("scroll_container[0.45,%g;9.85,%g;scr_wt_zones;vertical;0.1]", listTop, listH))
+	b.WriteString(fmt.Sprintf("scroll_container[0.45,%g;13.35,%g;scr_wt_zones;vertical;0.1]", listTop, listH))
 	accessItems := dropdownItems(options)
 	zy := 0.05
 	for _, z := range zones {
@@ -601,10 +601,10 @@ func (c *controller) showWorldTools(cc *proxy.ClientConn) {
 		}
 		id := strconv.Itoa(z.ID)
 		name := []rune(z.Name)
-		if len(name) > 11 {
-			name = append(name[:10], '…')
+		if len(name) > 18 {
+			name = append(name[:17], '…')
 		}
-		b.WriteString(box(0, zy, 9.8, 1.27, colorRow))
+		b.WriteString(box(0, zy, 13.3, 1.27, colorRow))
 		b.WriteString(box(0, zy, 0.14, 1.27, color))
 		b.WriteString(fmt.Sprintf("label[0.35,%g;%s]", zy+0.24, fmtEsc(string(name))))
 		b.WriteString(fmt.Sprintf("label[0.35,%g;%s]", zy+0.56, fmtEsc(mcColorize(muted, z.size()))))
@@ -612,33 +612,33 @@ func (c *controller) showWorldTools(cc *proxy.ClientConn) {
 		if m := missionsByZone[z.ID]; m != nil {
 			summary, sumColor := c.missionSummary(m)
 			title := []rune(m.Title)
-			if len(title) > 24 {
-				title = append(title[:23], '…')
+			if len(title) > 40 {
+				title = append(title[:39], '…')
 			}
 			b.WriteString(fmt.Sprintf("label[0.35,%g;%s]", zy+0.98, fmtEsc(
 				mcColorize(light, T("Mission: @1", string(title)))+mcColorize(sumColor, "   "+summary))))
-			b.WriteString(btn(7.62, zy+0.75, 2.08, 0.45, "wt_mission_"+id, T("Open mission")))
+			b.WriteString(btn(10.7, zy+0.75, 2.5, 0.45, "wt_mission_"+id, T("Open mission")))
 		} else {
 			b.WriteString(fmt.Sprintf("label[0.35,%g;%s]", zy+0.98, fmtEsc(mcColorize(muted, T("No mission")))))
-			b.WriteString(styledBtn(7.62, zy+0.75, 2.08, 0.45, "wt_mission_"+id, T("+ Mission"), colorPrimary))
+			b.WriteString(styledBtn(10.7, zy+0.75, 2.5, 0.45, "wt_mission_"+id, T("+ Mission"), colorPrimary))
 			b.WriteString(tooltip("wt_mission_"+id, T("Give this zone a mission: deliveries, animals or blocks to reach")))
 		}
-		b.WriteString(fmt.Sprintf("dropdown[2.25,%g;3.5,0.52;wt_access_%s;%s;%d;true]",
+		b.WriteString(fmt.Sprintf("dropdown[3.1,%g;4.4,0.52;wt_access_%s;%s;%d;true]",
 			zy+0.13, id, accessItems, zoneAccessIndex(z, groups)))
 		b.WriteString(tooltip("wt_access_"+id, T("Who can build inside this zone")))
 		if _, _, _, _, ok := z.teleportPoint(); ok {
-			b.WriteString(iconBtn(5.85, zy+0.13, 0.52, "wt_tp_me_"+id, iconTeleport, T("Teleport me here")))
-			b.WriteString(btn(6.45, zy+0.13, 1.1, 0.52, "wt_tp_class_"+id, T("Class")))
+			b.WriteString(iconBtn(7.65, zy+0.13, 0.52, "wt_tp_me_"+id, iconTeleport, T("Teleport me here")))
+			b.WriteString(btn(8.3, zy+0.13, 1.45, 0.52, "wt_tp_class_"+id, T("Class")))
 			b.WriteString(tooltip("wt_tp_class_"+id, T("Teleport every online student of the class here")))
 			if len(groups) > 0 {
-				b.WriteString(btn(7.62, zy+0.13, 1.1, 0.52, "wt_tp_group_"+id, T("Group")))
+				b.WriteString(btn(9.85, zy+0.13, 1.45, 0.52, "wt_tp_group_"+id, T("Group")))
 				b.WriteString(tooltip("wt_tp_group_"+id, T("Teleport the group chosen above here")))
 			}
 		}
 		if c.isDeleteArmed(cc.Name(), "zone:"+id) {
-			b.WriteString(styledBtn(8.6, zy+0.13, 1.1, 0.52, "zone_del_"+id, T("Sure?"), colorDanger))
+			b.WriteString(styledBtn(11.9, zy+0.13, 1.3, 0.52, "zone_del_"+id, T("Sure?"), colorDanger))
 		} else {
-			b.WriteString(iconBtn(9.2, zy+0.13, 0.52, "zone_del_"+id, iconClose, T("Remove zone")))
+			b.WriteString(iconBtn(12.68, zy+0.13, 0.52, "zone_del_"+id, iconClose, T("Remove zone")))
 		}
 		zy += 1.35
 	}

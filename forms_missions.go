@@ -226,8 +226,8 @@ func (c *controller) showMissionEditor(cc *proxy.ClientConn) {
 	}
 	if mission != nil && !editing {
 		var b strings.Builder
-		fsOpen(&b, 12, 10.4)
-		fsHeader(&b, 12, T("Mission · @1", place), T("Played by: @1", audience), true, true)
+		fsOpen(&b, 14, 10.4)
+		fsHeader(&b, 14, T("Mission · @1", place), T("Played by: @1", audience), true, true)
 		c.writeMissionStatus(&b, cc, mission)
 		cc.ShowFormspec("classrooms:mission", b.String())
 		return
@@ -244,7 +244,7 @@ func (c *controller) showMissionEditor(cc *proxy.ClientConn) {
 	specials := c.getSpecials(inst.ID)
 	special := findSpecial(specials, draft.Kind)
 
-	const w, h = 14.2, 11.2
+	const w, h = 18.2, 11.2
 	var b strings.Builder
 	fsOpen(&b, w, h)
 	heading := T("New mission · @1", place)
@@ -257,14 +257,14 @@ func (c *controller) showMissionEditor(cc *proxy.ClientConn) {
 	fsHeader(&b, w, heading, T("Played by: @1", audience), true, true)
 
 	// Title and description.
-	b.WriteString(box(0.3, 1.3, 13.6, 1.45, colorCard))
-	b.WriteString(fmt.Sprintf("field[0.55,1.9;5.4,0.6;ms_title;%s;%s]", fmtEsc(T("Mission title")), fmtEsc(draft.Title)))
-	b.WriteString(fmt.Sprintf("field[6.15,1.9;7.5,0.6;ms_desc;%s;%s]", fmtEsc(T("Short explanation for students (optional)")), fmtEsc(draft.Description)))
+	b.WriteString(box(0.3, 1.3, 17.6, 1.45, colorCard))
+	b.WriteString(fmt.Sprintf("field[0.55,1.9;7.0,0.6;ms_title;%s;%s]", fmtEsc(T("Mission title")), fmtEsc(draft.Title)))
+	b.WriteString(fmt.Sprintf("field[7.75,1.9;9.9,0.6;ms_desc;%s;%s]", fmtEsc(T("Short explanation for students (optional)")), fmtEsc(draft.Description)))
 	b.WriteString("field_close_on_enter[ms_title;false]field_close_on_enter[ms_desc;false]")
 
 	// Left: builder.
-	b.WriteString(box(0.3, 2.95, 8.75, 7.05, colorCard))
-	tabBar(&b, 0.5, 3.1, 4.1, "ms_mode_"+draft.Mode, [][2]string{
+	b.WriteString(box(0.3, 2.95, 10.75, 7.05, colorCard))
+	tabBar(&b, 0.5, 3.1, 5.1, "ms_mode_"+draft.Mode, [][2]string{
 		{"ms_mode_goals", T("1 · Goals")},
 		{"ms_mode_tools", T("2 · Tools for students")},
 	})
@@ -278,54 +278,54 @@ func (c *controller) showMissionEditor(cc *proxy.ClientConn) {
 	}
 
 	// Right: the mission so far.
-	b.WriteString(box(9.25, 2.95, 4.65, 7.05, colorCard))
-	b.WriteString(sectionTitle(9.45, 3.25, T("THIS MISSION · GOALS @1/@2", len(draft.Goals), maxMissionGoals)))
+	b.WriteString(box(11.25, 2.95, 6.65, 7.05, colorCard))
+	b.WriteString(sectionTitle(11.45, 3.25, T("THIS MISSION · GOALS @1/@2", len(draft.Goals), maxMissionGoals)))
 	if len(draft.Goals) == 0 {
-		b.WriteString(hint(9.5, 3.7, T("No goals yet.")))
+		b.WriteString(hint(11.5, 3.7, T("No goals yet.")))
 	}
 	gy := 3.55
 	for i, g := range draft.Goals {
-		b.WriteString(box(9.4, gy, 4.35, 0.62, colorRow))
-		c.smallIcon(&b, 9.48, gy+0.06, 0.5, g.Icon)
+		b.WriteString(box(11.4, gy, 6.35, 0.62, colorRow))
+		c.smallIcon(&b, 11.48, gy+0.06, 0.5, g.Icon)
 		// Only the item name is cut: the sentence around it is translated by
 		// the client and cannot be measured here.
 		short := g
-		if r := []rune(g.Label); len(r) > 12 && g.Type != goalSpecial {
-			short.Label = string(append(r[:11], '…'))
+		if r := []rune(g.Label); len(r) > 22 && g.Type != goalSpecial {
+			short.Label = string(append(r[:21], '…'))
 		}
-		b.WriteString(fmt.Sprintf("label[10.08,%g;%s]", gy+0.31, fmtEsc(goalTextFor(short, global))))
+		b.WriteString(fmt.Sprintf("label[12.08,%g;%s]", gy+0.31, fmtEsc(goalTextFor(short, global))))
 		if g.Type == goalSpecial {
 			// Set by the activity: changed through its settings.
-			b.WriteString(fmt.Sprintf("tooltip[9.4,%g;4.35,0.62;%s]", gy, fmtEsc(T("Goal of the special mission: change it in its settings"))))
+			b.WriteString(fmt.Sprintf("tooltip[11.4,%g;6.35,0.62;%s]", gy, fmtEsc(T("Goal of the special mission: change it in its settings"))))
 		} else {
-			b.WriteString(iconBtn(13.33, gy+0.13, 0.36, fmt.Sprintf("ms_rm_%d", i), iconClose, T("Remove: @1", goalTextFor(g, global))))
+			b.WriteString(iconBtn(17.33, gy+0.13, 0.36, fmt.Sprintf("ms_rm_%d", i), iconClose, T("Remove: @1", goalTextFor(g, global))))
 		}
 		gy += 0.68
 	}
-	b.WriteString(sectionTitle(9.45, 7.75, T("TOOLS FOR EACH STUDENT")))
+	b.WriteString(sectionTitle(11.45, 7.75, T("TOOLS FOR EACH STUDENT")))
 	var autoTools []catalogEntry
 	if special != nil {
 		autoTools = special.activeTools(draft.Settings)
 	}
 	if len(draft.Tools) == 0 && len(autoTools) == 0 {
-		b.WriteString(hint(9.5, 8.15, T("None (optional).")))
+		b.WriteString(hint(11.5, 8.15, T("None (optional).")))
 	}
 	for i, t := range autoTools {
-		col, row := i%2, i/2
-		x, y := 9.4+float64(col)*2.2, 7.95+float64(row)*0.5
-		b.WriteString(box(x, y, 2.12, 0.44, colorRow))
+		col, row := i%3, i/3
+		x, y := 11.4+float64(col)*2.15, 7.95+float64(row)*0.5
+		b.WriteString(box(x, y, 2.08, 0.44, colorRow))
 		c.smallIcon(&b, x+0.04, y+0.02, 0.4, t.Icon)
 		b.WriteString(coloredLbl(x+0.5, y+0.22, warning, "★"))
-		b.WriteString(fmt.Sprintf("tooltip[%g,%g;2.12,0.44;%s]", x, y, fmtEsc(T("@1: given automatically in the zone, taken back when leaving it", t.Label))))
+		b.WriteString(fmt.Sprintf("tooltip[%g,%g;2.08,0.44;%s]", x, y, fmtEsc(T("@1: given automatically in the zone, taken back when leaving it", t.Label))))
 	}
 	for j, t := range draft.Tools {
 		i := j + len(autoTools)
-		col, row := i%2, i/2
-		x, y := 9.4+float64(col)*2.2, 7.95+float64(row)*0.5
-		b.WriteString(box(x, y, 2.12, 0.44, colorRow))
+		col, row := i%3, i/3
+		x, y := 11.4+float64(col)*2.15, 7.95+float64(row)*0.5
+		b.WriteString(box(x, y, 2.08, 0.44, colorRow))
 		c.smallIcon(&b, x+0.04, y+0.02, 0.4, t.Icon)
 		b.WriteString(fmt.Sprintf("label[%g,%g;%s]", x+0.5, y+0.22, fmtEsc(fmt.Sprintf("×%d", t.Count))))
-		b.WriteString(iconBtn(x+1.72, y+0.06, 0.32, fmt.Sprintf("ms_tool_rm_%d", j), iconClose, T("Remove @1", t.Label)))
+		b.WriteString(iconBtn(x+1.68, y+0.06, 0.32, fmt.Sprintf("ms_tool_rm_%d", j), iconClose, T("Remove @1", t.Label)))
 	}
 
 	// Footer: special missions on the left, then a hint, then the buttons.
@@ -335,26 +335,33 @@ func (c *controller) showMissionEditor(cc *proxy.ClientConn) {
 	} else if special != nil {
 		specialColor = colorPrimary
 	}
-	b.WriteString(styledBtn(0.3, 10.2, 3.4, 0.8, "ms_mode_special", T("★ Special missions"), specialColor))
-	b.WriteString(tooltip("ms_mode_special", T("Activities with their own rules, set up for you in the world")))
+	// The special missions button turns into the way back while their list
+	// is open: a simple mission with the teacher's own goals.
+	if draft.Mode == "special" && !editing {
+		b.WriteString(styledBtn(0.3, 10.2, 4.2, 0.8, "ms_mode_simple", T("◄ Simple missions"), colorButton))
+		b.WriteString(tooltip("ms_mode_simple", T("Back to a mission with your own goals: deliveries, gathering, animals, blocks")))
+	} else {
+		b.WriteString(styledBtn(0.3, 10.2, 4.2, 0.8, "ms_mode_special", T("★ Special missions"), specialColor))
+		b.WriteString(tooltip("ms_mode_special", T("Activities with their own rules, set up for you in the world")))
+	}
 	footerHint := ""
 	if editing {
 		footerHint = T("Progress and tools already given are kept.")
 	} else if needsChest(draft.Goals, global) {
-		b.WriteString(fmt.Sprintf("image[3.9,10.38;0.42,0.42;%s]", iconWarning))
+		b.WriteString(fmt.Sprintf("image[4.7,10.38;0.42,0.42;%s]", iconWarning))
 		footerHint = T("After starting you get the delivery chest: place it inside the zone.")
 		if global {
 			footerHint = T("After starting you get the delivery chest: place it anywhere.")
 		}
 	}
 	if footerHint != "" {
-		b.WriteString(fmt.Sprintf("textarea[4.35,10.15;3.8,0.95;;;%s]", fmtEsc(mcColorize(muted, footerHint))))
+		b.WriteString(fmt.Sprintf("textarea[5.15,10.15;7.0,0.95;;;%s]", fmtEsc(mcColorize(muted, footerHint))))
 	}
 	if editing {
-		b.WriteString(btn(8.25, 10.2, 2.4, 0.8, "ms_cancel_edit", T("Cancel")))
-		b.WriteString(styledBtn(10.8, 10.2, 3.1, 0.8, "ms_start", T("Save changes"), colorPrimary))
+		b.WriteString(btn(12.25, 10.2, 2.4, 0.8, "ms_cancel_edit", T("Cancel")))
+		b.WriteString(styledBtn(14.8, 10.2, 3.1, 0.8, "ms_start", T("Save changes"), colorPrimary))
 	} else {
-		b.WriteString(styledBtn(10.8, 10.2, 3.1, 0.8, "ms_start", T("Start mission"), colorPrimary))
+		b.WriteString(styledBtn(14.8, 10.2, 3.1, 0.8, "ms_start", T("Start mission"), colorPrimary))
 	}
 
 	cc.ShowFormspec("classrooms:mission", b.String())
@@ -368,7 +375,7 @@ func (c *controller) writeGoalBuilder(b *strings.Builder, draft *missionDraft, c
 		if i+1 == typeIndex {
 			color = colorTabFocus
 		}
-		b.WriteString(styledBtn(0.5+float64(i)*2.07, 4.3, 2.0, 0.7, fmt.Sprintf("ms_type_%d", i+1), goalTypeButtons[i], color))
+		b.WriteString(styledBtn(0.5+float64(i)*2.57, 4.3, 2.5, 0.7, fmt.Sprintf("ms_type_%d", i+1), goalTypeButtons[i], color))
 		b.WriteString(tooltip(fmt.Sprintf("ms_type_%d", i+1), missionGoalTypes[i][1]))
 	}
 	goalType := missionGoalTypes[typeIndex-1][0]
@@ -379,10 +386,10 @@ func (c *controller) writeGoalBuilder(b *strings.Builder, draft *missionDraft, c
 		b.WriteString(hint(0.55, 5.8, T("Nothing of this kind exists in this world.")))
 		return
 	}
-	const perRow, cell = 8, 1.03
+	const perRow, cell = 10, 1.03
 	rows := (len(entries) + perRow - 1) / perRow
-	b.WriteString(scrollbarFor("scr_ms_pick", 8.75, 5.5, 2.15, rows, cell, 0.05))
-	b.WriteString("scroll_container[0.5,5.5;8.2,2.15;scr_ms_pick;vertical;0.1]")
+	b.WriteString(scrollbarFor("scr_ms_pick", 10.75, 5.5, 2.15, rows, cell, 0.05))
+	b.WriteString("scroll_container[0.5,5.5;10.2,2.15;scr_ms_pick;vertical;0.1]")
 	for i, e := range entries {
 		x := float64(i%perRow) * cell
 		y := 0.05 + float64(i/perRow)*cell
@@ -400,14 +407,14 @@ func (c *controller) writeGoalBuilder(b *strings.Builder, draft *missionDraft, c
 	b.WriteString(btn(6.05, 7.7, 0.85, 0.55, "ms_amt_p10", "+10"))
 
 	selected := findEntry(entries, draft.Target)
-	b.WriteString(box(0.5, 8.45, 8.35, 1.4, colorRow))
+	b.WriteString(box(0.5, 8.45, 10.35, 1.4, colorRow))
 	if selected == nil {
 		b.WriteString(hint(0.7, 8.85, T("Pick a picture above.")))
 	} else {
 		c.smallIcon(b, 0.62, 8.62, 0.6, selected.Icon)
 		b.WriteString(coloredLbl(1.35, 8.92, warning, goalSentence(goalType, draft.Count, selected.Label, global)))
 	}
-	b.WriteString(styledBtn(6.15, 9.25, 2.6, 0.5, "ms_add", T("+ Add this goal"), colorPrimary))
+	b.WriteString(styledBtn(8.15, 9.25, 2.6, 0.5, "ms_add", T("+ Add this goal"), colorPrimary))
 }
 
 func (c *controller) writeToolPicker(b *strings.Builder, draft *missionDraft, tools []catalogEntry, global bool) {
@@ -429,10 +436,10 @@ func (c *controller) writeToolPicker(b *strings.Builder, draft *missionDraft, to
 		b.WriteString(hint(0.55, 5.4, T("No tools available in this world.")))
 		return
 	}
-	const perRow, cell = 8, 1.03
+	const perRow, cell = 10, 1.03
 	rows := (len(tools) + perRow - 1) / perRow
-	b.WriteString(scrollbarFor("scr_ms_tools", 8.75, 5.45, 4.4, rows, cell, 0.05))
-	b.WriteString("scroll_container[0.5,5.45;8.2,4.4;scr_ms_tools;vertical;0.1]")
+	b.WriteString(scrollbarFor("scr_ms_tools", 10.75, 5.45, 4.4, rows, cell, 0.05))
+	b.WriteString("scroll_container[0.5,5.45;10.2,4.4;scr_ms_tools;vertical;0.1]")
 	for i, t := range tools {
 		x := float64(i%perRow) * cell
 		y := 0.05 + float64(i/perRow)*cell
@@ -459,11 +466,11 @@ func (c *controller) writeSpecialPicker(b *strings.Builder, inst *instanceData, 
 			return
 		}
 	} else {
-		const top, step = 4.75, 0.95
+		const top, step = 4.75, 1.2
 		height := float64(min(len(kinds), 2))*step + 0.05
 		y = top + height + 0.3
-		b.WriteString(scrollbarFor("scr_ms_special", 8.75, top, height, len(kinds), step, 0.05))
-		b.WriteString(fmt.Sprintf("scroll_container[0.5,%g;8.2,%g;scr_ms_special;vertical;0.1]", top, height))
+		b.WriteString(scrollbarFor("scr_ms_special", 10.75, top, height, len(kinds), step, 0.05))
+		b.WriteString(fmt.Sprintf("scroll_container[0.5,%g;10.2,%g;scr_ms_special;vertical;0.1]", top, height))
 		for i, k := range kinds {
 			y := 0.05 + float64(i)*step
 			selected := k.Key == draft.Kind
@@ -471,19 +478,20 @@ func (c *controller) writeSpecialPicker(b *strings.Builder, inst *instanceData, 
 			if selected {
 				color = colorButton
 			}
-			b.WriteString(box(0, y, 8.15, 0.85, color))
+			b.WriteString(box(0, y, 10.15, 1.1, color))
 			if selected {
-				b.WriteString(box(0, y, 0.1, 0.85, colorTabFocus))
+				b.WriteString(box(0, y, 0.1, 1.1, colorTabFocus))
 			}
-			c.smallIcon(b, 0.2, y+0.1, 0.65, k.Icon)
-			b.WriteString(coloredLbl(1.0, y+0.25, light, k.Label))
-			b.WriteString(fmt.Sprintf("label[1.0,%g;%s]", y+0.6, fmtEsc(mcColorize(muted, k.Description))))
-			b.WriteString(fmt.Sprintf("tooltip[0,%g;6.3,0.85;%s]", y, fmtEsc(k.Description)))
+			c.smallIcon(b, 0.2, y+0.2, 0.7, k.Icon)
+			b.WriteString(coloredLbl(1.05, y+0.25, light, k.Label))
+			// Two lines for the description, so it is never cut.
+			b.WriteString(fmt.Sprintf("textarea[1.0,%g;7.15,0.68;;;%s]", y+0.42, fmtEsc(mcColorize(muted, k.Description))))
+			b.WriteString(fmt.Sprintf("tooltip[0,%g;8.2,1.1;%s]", y, fmtEsc(k.Description)))
 			if selected {
-				b.WriteString(btn(6.4, y+0.15, 1.65, 0.55, "ms_special_none", T("Remove")))
+				b.WriteString(btn(8.35, y+0.27, 1.65, 0.55, "ms_special_none", T("Remove")))
 				b.WriteString(tooltip("ms_special_none", T("Back to a normal mission")))
 			} else {
-				b.WriteString(styledBtn(6.4, y+0.15, 1.65, 0.55, "ms_special_"+k.Key, T("Choose"), colorPrimary))
+				b.WriteString(styledBtn(8.35, y+0.27, 1.65, 0.55, "ms_special_"+k.Key, T("Choose"), colorPrimary))
 			}
 		}
 		b.WriteString("scroll_container_end[]")
@@ -497,7 +505,7 @@ func (c *controller) writeSpecialPicker(b *strings.Builder, inst *instanceData, 
 	y += 0.3
 	for _, s := range special.Settings {
 		v := s.clamp(draft.Settings[s.Key])
-		b.WriteString(box(0.5, y, 8.35, 0.62, colorRow))
+		b.WriteString(box(0.5, y, 10.35, 0.62, colorRow))
 		b.WriteString(fmt.Sprintf("label[0.7,%g;%s]", y+0.31, fmtEsc(s.Label)))
 		switch {
 		case editing:
@@ -505,15 +513,15 @@ func (c *controller) writeSpecialPicker(b *strings.Builder, inst *instanceData, 
 			if s.Type == "choice" {
 				text = s.Options[v-1]
 			}
-			b.WriteString(coloredLbl(5.0, y+0.31, warning, text))
+			b.WriteString(coloredLbl(6.0, y+0.31, warning, text))
 		case s.Type == "choice":
-			b.WriteString(fmt.Sprintf("dropdown[5.0,%g;3.75,0.5;ms_setc_%s;%s;%d;true]", y+0.06, s.Key, dropdownItems(s.Options), v))
+			b.WriteString(fmt.Sprintf("dropdown[6.0,%g;4.75,0.5;ms_setc_%s;%s;%d;true]", y+0.06, s.Key, dropdownItems(s.Options), v))
 		default:
-			b.WriteString(btn(5.0, y+0.06, 0.7, 0.5, "ms_setm_"+s.Key, "−"))
-			b.WriteString(fmt.Sprintf("field[5.75,%g;1.2,0.5;ms_setv_%s;;%d]", y+0.06, s.Key, v))
+			b.WriteString(btn(6.0, y+0.06, 0.7, 0.5, "ms_setm_"+s.Key, "−"))
+			b.WriteString(fmt.Sprintf("field[6.75,%g;1.2,0.5;ms_setv_%s;;%d]", y+0.06, s.Key, v))
 			b.WriteString(fmt.Sprintf("field_close_on_enter[ms_setv_%s;false]", s.Key))
-			b.WriteString(btn(7.0, y+0.06, 0.7, 0.5, "ms_setp_"+s.Key, "+"))
-			b.WriteString(hint(7.85, y+0.31, fmt.Sprintf("%d–%d", s.Min, s.Max)))
+			b.WriteString(btn(8.0, y+0.06, 0.7, 0.5, "ms_setp_"+s.Key, "+"))
+			b.WriteString(hint(8.85, y+0.31, fmt.Sprintf("%d–%d", s.Min, s.Max)))
 		}
 		y += 0.7
 	}
@@ -525,7 +533,7 @@ func (c *controller) writeSpecialPicker(b *strings.Builder, inst *instanceData, 
 	if special.Dig && !draft.global() {
 		if z := c.zoneByID(inst, draft.ZoneID); z != nil && !z.Open && !z.GroupID.Valid {
 			b.WriteString(fmt.Sprintf("image[0.55,%g;0.42,0.42;%s]", y+0.1, iconWarning))
-			b.WriteString(fmt.Sprintf("textarea[1.05,%g;7.8,0.95;;;%s]", y, fmtEsc(mcColorize(warning,
+			b.WriteString(fmt.Sprintf("textarea[1.05,%g;9.8,0.95;;;%s]", y, fmtEsc(mcColorize(warning,
 				T("Students cannot dig in a teachers-only zone: open this zone to the class or to a group.")))))
 		}
 	}
@@ -542,14 +550,14 @@ func (c *controller) writeMissionStatus(b *strings.Builder, cc *proxy.ClientConn
 			special = findSpecial(c.getSpecials(inst.ID), m.Kind)
 		}
 	}
-	b.WriteString(box(0.3, 1.3, 11.4, 1.6, colorCard))
+	b.WriteString(box(0.3, 1.3, 13.4, 1.6, colorCard))
 	b.WriteString(coloredLbl(0.55, 1.65, light, m.Title))
 	if m.Kind != "" {
 		label := T("Special mission")
 		if special != nil {
 			label = special.Label
 		}
-		b.WriteString(fmt.Sprintf("label[7.4,1.65;%s]", fmtEsc(mcColorize(warning, "★ ")+mcColorize(warning, label))))
+		b.WriteString(fmt.Sprintf("label[9.4,1.65;%s]", fmtEsc(mcColorize(warning, "★ ")+mcColorize(warning, label))))
 	}
 	if m.Description != "" {
 		b.WriteString(hint(0.55, 2.05, m.Description))
@@ -569,7 +577,7 @@ func (c *controller) writeMissionStatus(b *strings.Builder, cc *proxy.ClientConn
 		b.WriteString(coloredLbl(0.55, 2.5, color, T("In progress · @1", summary)))
 	}
 
-	b.WriteString(box(0.3, 3.1, 11.4, 4.0, colorCard))
+	b.WriteString(box(0.3, 3.1, 13.4, 4.0, colorCard))
 	b.WriteString(sectionTitle(0.55, 3.4, T("GOALS")))
 	gy := 3.7
 	for i, g := range m.Goals {
@@ -584,12 +592,12 @@ func (c *controller) writeMissionStatus(b *strings.Builder, cc *proxy.ClientConn
 		}
 		c.smallIcon(b, 0.55, gy-0.05, 0.45, g.Icon)
 		b.WriteString(fmt.Sprintf("label[1.15,%g;%s]", gy+0.17, fmtEsc(goalTextFor(g, global))))
-		progressBar(b, 6.4, gy+0.02, 3.9, min(have, g.Count), g.Count, color)
-		b.WriteString(fmt.Sprintf("label[10.45,%g;%s]", gy+0.17, fmtEsc(fmt.Sprintf("%d/%d", min(have, g.Count), g.Count))))
+		progressBar(b, 7.9, gy+0.02, 4.4, min(have, g.Count), g.Count, color)
+		b.WriteString(fmt.Sprintf("label[12.45,%g;%s]", gy+0.17, fmtEsc(fmt.Sprintf("%d/%d", min(have, g.Count), g.Count))))
 		gy += 0.55
 	}
 
-	b.WriteString(box(0.3, 7.3, 11.4, 1.75, colorCard))
+	b.WriteString(box(0.3, 7.3, 13.4, 1.75, colorCard))
 	toolsTitle, chestHelp, retoolsHelp := T("TOOLS GIVEN IN THE ZONE"),
 		T("Place it inside this zone: students put the requested items in it"),
 		T("Every student gets the support tools again the next time they are in the zone")
@@ -627,24 +635,24 @@ func (c *controller) writeMissionStatus(b *strings.Builder, cc *proxy.ClientConn
 		} else {
 			b.WriteString(coloredLbl(0.55, 8.6, warning, T("Delivery chest: not placed yet.")))
 		}
-		b.WriteString(btn(7.0, 8.35, 4.5, 0.55, "ms_chest", T("Give me the delivery chest")))
+		b.WriteString(btn(9.0, 8.35, 4.5, 0.55, "ms_chest", T("Give me the delivery chest")))
 		b.WriteString(tooltip("ms_chest", chestHelp))
 	}
 
 	if c.isDeleteArmed(cc.Name(), fmt.Sprintf("mission:%d", m.ID)) {
 		b.WriteString(coloredLbl(0.55, 9.65, danger, T("Sure? Progress is lost.")))
-		b.WriteString(styledBtn(8.0, 9.3, 3.7, 0.75, "ms_delete", T("Yes, delete mission"), colorDanger))
+		b.WriteString(styledBtn(9.25, 9.3, 4.45, 0.75, "ms_delete", T("Yes, delete mission"), colorDanger))
 		return
 	}
 	if !complete {
-		b.WriteString(btn(0.3, 9.3, 3.6, 0.75, "ms_edit", T("Edit goals & tools")))
+		b.WriteString(btn(0.3, 9.3, 4.3, 0.75, "ms_edit", T("Edit goals & tools")))
 		b.WriteString(tooltip("ms_edit", T("Change goals and support tools: progress and tools already given stay")))
-		b.WriteString(btn(4.05, 9.3, 3.75, 0.75, "ms_retools", T("Give tools again")))
+		b.WriteString(btn(4.75, 9.3, 4.3, 0.75, "ms_retools", T("Give tools again")))
 		b.WriteString(tooltip("ms_retools", retoolsHelp))
 	} else {
 		b.WriteString(hint(0.55, 9.65, T("Delete it to create a new one.")))
 	}
-	b.WriteString(styledBtn(8.0, 9.3, 3.7, 0.75, "ms_delete", T("Delete mission"), colorDanger))
+	b.WriteString(styledBtn(9.25, 9.3, 4.45, 0.75, "ms_delete", T("Delete mission"), colorDanger))
 }
 
 func (c *controller) handleMissionEditor(cc *proxy.ClientConn, fields []mt.Field) {
@@ -767,6 +775,11 @@ func (c *controller) handleMissionEditor(cc *proxy.ClientConn, fields []mt.Field
 			draft.Mode = "tools"
 		case k == "ms_mode_special":
 			draft.Mode = "special"
+		case k == "ms_mode_simple":
+			draft.Mode = "goals"
+			if draft.EditingID == 0 {
+				draft.setSpecial(nil)
+			}
 		case k == "ms_special_none" && draft.EditingID == 0:
 			draft.setSpecial(nil)
 		case strings.HasPrefix(k, "ms_special_") && draft.EditingID == 0:
@@ -941,7 +954,7 @@ func (c *controller) writeMissionsTab(b *strings.Builder, player string, inst *i
 	}
 
 	// New mission.
-	b.WriteString(box(0.3, 2.1, 10.4, 1.95, colorCard))
+	b.WriteString(box(0.3, 2.1, 13.9, 1.95, colorCard))
 	b.WriteString(sectionTitle(0.55, 2.4, T("NEW MISSION")))
 	b.WriteString(hint(2.75, 2.4, T("Goals to reach, with tools for the students")))
 	places, _ := newMissionPlaces(zones, byZone)
@@ -956,15 +969,15 @@ func (c *controller) writeMissionsTab(b *strings.Builder, player string, inst *i
 		pick[1] = 1
 	}
 	b.WriteString(hint(0.55, 2.85, T("Where")))
-	b.WriteString(fmt.Sprintf("dropdown[0.55,3.05;3.6,0.6;wm_where;%s;%d;true]", dropdownItems(places), pick[0]))
+	b.WriteString(fmt.Sprintf("dropdown[0.55,3.05;5.0,0.6;wm_where;%s;%d;true]", dropdownItems(places), pick[0]))
 	b.WriteString(tooltip("wm_where", T("Whole world: anywhere in this world. Zone: only inside that zone")))
-	b.WriteString(hint(4.35, 2.85, T("Played by (whole world)")))
-	b.WriteString(fmt.Sprintf("dropdown[4.35,3.05;3.3,0.6;wm_group;%s;%d;true]", dropdownItems(audiences), pick[1]))
+	b.WriteString(hint(5.75, 2.85, T("Played by (whole world)")))
+	b.WriteString(fmt.Sprintf("dropdown[5.75,3.05;4.6,0.6;wm_group;%s;%d;true]", dropdownItems(audiences), pick[1]))
 	b.WriteString(tooltip("wm_group", T("Zone missions are played by the zone's group, or the class")))
-	b.WriteString(styledBtn(7.85, 3.05, 2.65, 0.6, "wm_create", T("+ Create mission"), colorPrimary))
+	b.WriteString(styledBtn(10.6, 3.05, 3.4, 0.6, "wm_create", T("+ Create mission"), colorPrimary))
 
 	// Missions of this world.
-	b.WriteString(box(0.3, 4.25, 10.4, 7.3, colorCard))
+	b.WriteString(box(0.3, 4.25, 13.9, 7.3, colorCard))
 	b.WriteString(sectionTitle(0.55, 4.55, T("MISSIONS IN THIS WORLD (@1)", len(list))))
 	if len(list) == 0 {
 		b.WriteString(hint(0.6, 5.1, T("No missions yet.")))
@@ -975,8 +988,8 @@ func (c *controller) writeMissionsTab(b *strings.Builder, player string, inst *i
 		zoneNames[z.ID] = z
 	}
 	const top, height, step = 4.85, 6.55, 1.1
-	b.WriteString(scrollbarFor("scr_wm_list", 10.35, top, height, len(list), step, 0.05))
-	b.WriteString(fmt.Sprintf("scroll_container[0.45,%g;9.85,%g;scr_wm_list;vertical;0.1]", top, height))
+	b.WriteString(scrollbarFor("scr_wm_list", 13.85, top, height, len(list), step, 0.05))
+	b.WriteString(fmt.Sprintf("scroll_container[0.45,%g;13.35,%g;scr_wm_list;vertical;0.1]", top, height))
 	y := 0.05
 	for i := range list {
 		m := &list[i]
@@ -1002,11 +1015,11 @@ func (c *controller) writeMissionsTab(b *strings.Builder, player string, inst *i
 			color = "#3fb56b"
 		}
 		title := []rune(m.Title)
-		if len(title) > 30 {
-			title = append(title[:29], '…')
+		if len(title) > 48 {
+			title = append(title[:47], '…')
 		}
 		id := strconv.Itoa(m.ID)
-		b.WriteString(box(0, y, 9.8, 1.0, colorRow))
+		b.WriteString(box(0, y, 13.3, 1.0, colorRow))
 		b.WriteString(box(0, y, 0.14, 1.0, color))
 		b.WriteString(fmt.Sprintf("label[0.35,%g;%s]", y+0.28, fmtEsc(string(title))))
 		b.WriteString(fmt.Sprintf("label[0.35,%g;%s]", y+0.7, fmtEsc(
@@ -1015,9 +1028,9 @@ func (c *controller) writeMissionsTab(b *strings.Builder, player string, inst *i
 			if i >= 3 {
 				break
 			}
-			c.smallIcon(b, 6.85+float64(i)*0.47, y+0.29, 0.42, g.Icon)
+			c.smallIcon(b, 9.85+float64(i)*0.47, y+0.29, 0.42, g.Icon)
 		}
-		b.WriteString(btn(8.3, y+0.22, 1.4, 0.56, "wm_open_"+id, T("Open")))
+		b.WriteString(btn(11.45, y+0.22, 1.75, 0.56, "wm_open_"+id, T("Open")))
 		b.WriteString(tooltip("wm_open_"+id, T("See progress, edit goals and tools, or delete")))
 		y += step
 	}
