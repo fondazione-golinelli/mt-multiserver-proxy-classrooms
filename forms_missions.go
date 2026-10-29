@@ -48,7 +48,7 @@ func catalogKind(goalType string) string {
 	return goalType
 }
 
-var toolAmounts = []int{1, 4, 16}
+var toolAmounts = []int{1, 4, 16, 64}
 
 // Short labels for the goal type buttons; goalTypeHints explains each.
 var goalTypeButtons = []string{T("Deliver"), T("Gather"), T("Animals"), T("Blocks")}
